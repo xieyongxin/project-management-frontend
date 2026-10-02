@@ -119,6 +119,22 @@ export function createProjectRequirement(projectId, data) {
   })
 }
 
+export function getProjectRequirement(projectId, requirementId) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId,
+    method: 'get',
+    silentErrorStatus: [404]
+  })
+}
+
+export function listProjectRequirementVersions(projectId, requirementId) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/versions',
+    method: 'get',
+    silentErrorStatus: [404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',
