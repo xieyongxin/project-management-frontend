@@ -66,3 +66,12 @@ export function updateProjectMemberAdmin(projectId, userId, data) {
     silentErrorStatus: [400, 403, 404]
   })
 }
+
+export function listProjectOperationLogs(projectId, query) {
+  return request({
+    url: '/project/' + projectId + '/logs',
+    method: 'get',
+    params: query,
+    silentErrorStatus: [403, 404]
+  })
+}

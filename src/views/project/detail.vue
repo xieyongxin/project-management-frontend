@@ -82,12 +82,40 @@
           </template>
         </el-table-column>
       </el-table>
+      <template v-if="canViewProjectLogs">
+        <div class="section-heading">
+          <h3>项目操作日志</h3>
+          <el-button link type="primary" @click="loadLogs">刷新</el-button>
+        </div>
+        <el-alert v-if="logsError" title="项目日志加载失败" type="error" show-icon :closable="false" class="mb8">
+          <template #default>
+            <span>请检查权限或网络后重试。</span>
+            <el-button link type="primary" @click="loadLogs">重试</el-button>
+          </template>
+        </el-alert>
+        <el-table v-loading="logsLoading" :data="logs">
+          <el-table-column label="操作时间" prop="createTime" min-width="170" />
+          <el-table-column label="操作者" prop="operatorName" min-width="120" />
+          <el-table-column label="目标成员" prop="targetUserName" min-width="120">
+            <template #default="scope">{{ scope.row.targetUserName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="操作类型" prop="operationType" min-width="190" />
+          <el-table-column label="说明" prop="detail" min-width="280" show-overflow-tooltip />
+        </el-table>
+        <pagination
+          v-show="logsTotal > 0"
+          v-model:page="logsPage"
+          v-model:limit="logsPageSize"
+          :total="logsTotal"
+          @pagination="loadLogs"
+        />
+      </template>
     </template>
   </div>
 </template>
 
 <script setup name="ProjectDetail">
-import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberAdmin, updateProjectMemberRole, updateProjectName } from '@/api/project'
+import { getProject, listProjectMemberRoles, listProjectMembers, listProjectOperationLogs, updateProjectMemberAdmin, updateProjectMemberRole, updateProjectName } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -111,7 +139,15 @@ const adminDrafts = reactive({})
 const nameEditing = ref(false)
 const nameSaving = ref(false)
 const projectNameDraft = ref('')
+const logs = ref([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(10)
+const logsLoading = ref(false)
+const logsError = ref(false)
 const userStore = useUserStore()
+const canViewProjectLogs = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:log:list'))
 
 function backToList() {
   router.push('/project/index')
@@ -131,6 +167,10 @@ async function loadProject() {
   Object.keys(adminDrafts).forEach(key => delete adminDrafts[key])
   nameEditing.value = false
   projectNameDraft.value = ''
+  logs.value = []
+  logsTotal.value = 0
+  logsPage.value = 1
+  logsError.value = false
   try {
     const response = await getProject(route.params.projectId)
     project.value = response.data
@@ -161,6 +201,9 @@ async function loadMembers() {
     if (!nameEditing.value) projectNameDraft.value = project.value?.projectName || ''
     if (canEditMemberRoles.value) {
       await loadRoleOptions()
+    }
+    if (canViewProjectLogs.value) {
+      await loadLogs()
     }
   } catch (error) {
     if (error.response?.status === 404) {
@@ -252,6 +295,26 @@ async function saveProjectName() {
     projectNameDraft.value = project.value?.projectName || ''
   } finally {
     nameSaving.value = false
+  }
+}
+
+async function loadLogs() {
+  if (!canViewProjectLogs.value) return
+  logsLoading.value = true
+  logsError.value = false
+  try {
+    const response = await listProjectOperationLogs(route.params.projectId, {
+      pageNum: logsPage.value,
+      pageSize: logsPageSize.value
+    })
+    logs.value = response.rows || []
+    logsTotal.value = response.total || 0
+  } catch (error) {
+    logs.value = []
+    logsTotal.value = 0
+    logsError.value = error.response?.status !== 403 && error.response?.status !== 404
+  } finally {
+    logsLoading.value = false
   }
 }
 
