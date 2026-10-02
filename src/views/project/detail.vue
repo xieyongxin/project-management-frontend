@@ -60,7 +60,16 @@
         </el-table-column>
         <el-table-column label="项目管理员" width="120">
           <template #default="scope">
-            <el-tag v-if="scope.row.isProjectAdmin === 1" type="success">是</el-tag>
+            <el-switch
+              v-if="canEditMemberRoles"
+              v-model="adminDrafts[scope.row.userId]"
+              :active-value="true"
+              :inactive-value="false"
+              :loading="adminSaving"
+              :disabled="adminSaving"
+              @change="saveMemberAdmin(scope.row)"
+            />
+            <el-tag v-else-if="scope.row.isProjectAdmin === 1" type="success">是</el-tag>
             <span v-else>否</span>
           </template>
         </el-table-column>
@@ -70,7 +79,7 @@
 </template>
 
 <script setup name="ProjectDetail">
-import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberRole } from '@/api/project'
+import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberAdmin, updateProjectMemberRole } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -89,6 +98,8 @@ const canEditMemberRoles = ref(false)
 const rolesLoading = ref(false)
 const roleSaving = ref(false)
 const roleOptionsError = ref(false)
+const adminSaving = ref(false)
+const adminDrafts = reactive({})
 const userStore = useUserStore()
 
 function backToList() {
@@ -106,6 +117,7 @@ async function loadProject() {
   roleOptionsError.value = false
   canEditMemberRoles.value = false
   Object.keys(roleDrafts).forEach(key => delete roleDrafts[key])
+  Object.keys(adminDrafts).forEach(key => delete adminDrafts[key])
   try {
     const response = await getProject(route.params.projectId)
     project.value = response.data
@@ -129,6 +141,7 @@ async function loadMembers() {
     members.value = response.data || []
     members.value.forEach(member => {
       roleDrafts[member.userId] = member.roleId
+      adminDrafts[member.userId] = member.isProjectAdmin === 1
     })
     const currentMember = members.value.find(member => String(member.userId) === String(userStore.id))
     canEditMemberRoles.value = currentMember?.isProjectAdmin === 1
@@ -180,6 +193,25 @@ async function saveMemberRole(member) {
     roleDrafts[member.userId] = member.roleId
   } finally {
     roleSaving.value = false
+  }
+}
+
+async function saveMemberAdmin(member) {
+  if (adminSaving.value) return
+  const projectAdmin = adminDrafts[member.userId]
+  adminSaving.value = true
+  try {
+    const response = await updateProjectMemberAdmin(route.params.projectId, member.userId, { projectAdmin })
+    member.isProjectAdmin = response.data.isProjectAdmin
+    adminDrafts[member.userId] = member.isProjectAdmin === 1
+    if (String(member.userId) === String(userStore.id)) {
+      canEditMemberRoles.value = member.isProjectAdmin === 1
+    }
+    proxy?.$modal?.msgSuccess?.(projectAdmin ? '已授予项目管理员资格' : '已撤销项目管理员资格')
+  } catch (_error) {
+    adminDrafts[member.userId] = member.isProjectAdmin === 1
+  } finally {
+    adminSaving.value = false
   }
 }
 

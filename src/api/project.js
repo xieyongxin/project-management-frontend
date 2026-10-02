@@ -48,3 +48,12 @@ export function updateProjectMemberRole(projectId, userId, data) {
     silentErrorStatus: [403, 404]
   })
 }
+
+export function updateProjectMemberAdmin(projectId, userId, data) {
+  return request({
+    url: '/project/' + projectId + '/members/' + userId + '/admin',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
