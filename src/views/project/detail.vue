@@ -86,6 +86,17 @@
             <span v-else>否</span>
           </template>
         </el-table-column>
+        <el-table-column v-if="canEditMemberRoles" label="操作" width="100" fixed="right">
+          <template #default="scope">
+            <el-button
+              link
+              type="danger"
+              :loading="memberRemoving === scope.row.userId"
+              :disabled="memberRemoving !== null"
+              @click="removeMember(scope.row)"
+            >移除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <template v-if="canViewProjectLogs">
         <div class="section-heading">
@@ -120,7 +131,7 @@
 </template>
 
 <script setup name="ProjectDetail">
-import { getProject, listProjectMemberRoles, listProjectMembers, listProjectOperationLogs, updateProjectMemberAdmin, updateProjectMemberRole, updateProjectName } from '@/api/project'
+import { getProject, listProjectMemberRoles, listProjectMembers, listProjectOperationLogs, removeProjectMember, updateProjectMemberAdmin, updateProjectMemberRole, updateProjectName } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -140,6 +151,7 @@ const rolesLoading = ref(false)
 const roleSaving = ref(false)
 const roleOptionsError = ref(false)
 const adminSaving = ref(false)
+const memberRemoving = ref(null)
 const adminDrafts = reactive({})
 const nameEditing = ref(false)
 const nameSaving = ref(false)
@@ -170,6 +182,7 @@ async function loadProject() {
   canEditMemberRoles.value = false
   Object.keys(roleDrafts).forEach(key => delete roleDrafts[key])
   Object.keys(adminDrafts).forEach(key => delete adminDrafts[key])
+  memberRemoving.value = null
   nameEditing.value = false
   projectNameDraft.value = ''
   logs.value = []
@@ -274,6 +287,26 @@ async function saveMemberAdmin(member) {
     adminDrafts[member.userId] = member.isProjectAdmin === 1
   } finally {
     adminSaving.value = false
+  }
+}
+
+async function removeMember(member) {
+  if (memberRemoving.value !== null) return
+  try {
+    await proxy?.$modal?.confirm?.(`确认移除项目成员“${member.userName || member.nickName || member.userId}”吗？`)
+  } catch (_error) {
+    return
+  }
+  memberRemoving.value = member.userId
+  try {
+    await removeProjectMember(route.params.projectId, member.userId)
+    proxy?.$modal?.msgSuccess?.('项目成员已移除')
+    await loadMembers()
+    if (canViewProjectLogs.value) await loadLogs()
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error.response?.data?.msg || '移除项目成员失败')
+  } finally {
+    memberRemoving.value = null
   }
 }
 

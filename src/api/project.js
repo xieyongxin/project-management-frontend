@@ -76,6 +76,14 @@ export function updateProjectMemberAdmin(projectId, userId, data) {
   })
 }
 
+export function removeProjectMember(projectId, userId) {
+  return request({
+    url: '/project/' + projectId + '/members/' + userId,
+    method: 'delete',
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function listProjectOperationLogs(projectId, query) {
   return request({
     url: '/project/' + projectId + '/logs',
