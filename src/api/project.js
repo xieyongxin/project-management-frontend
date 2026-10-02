@@ -25,6 +25,15 @@ export function updateProjectName(projectId, data) {
   })
 }
 
+export function updateProjectStatus(projectId, data) {
+  return request({
+    url: '/project/' + projectId + '/status',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function getProject(projectId) {
   return request({
     url: '/project/' + projectId,

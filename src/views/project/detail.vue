@@ -27,6 +27,11 @@
       </div>
       <el-descriptions :column="2" border>
         <el-descriptions-item label="项目编号">{{ project.projectId }}</el-descriptions-item>
+        <el-descriptions-item label="项目状态">
+          <el-tag :type="project.status === 'ARCHIVED' ? 'info' : 'success'">
+            {{ project.status === 'ARCHIVED' ? '已归档' : '正常' }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ parseTime(project.createTime) }}</el-descriptions-item>
       </el-descriptions>
       <div class="section-heading">

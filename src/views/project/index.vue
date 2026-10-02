@@ -39,6 +39,13 @@
         </template>
       </el-table-column>
       <el-table-column label="项目编号" prop="projectId" width="130" />
+      <el-table-column label="状态" prop="status" width="120">
+        <template #default="scope">
+          <el-tag :type="scope.row.status === 'ARCHIVED' ? 'info' : 'success'">
+            {{ scope.row.status === 'ARCHIVED' ? '已归档' : '正常' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="创建时间" prop="createTime" width="190">
         <template #default="scope">
           {{ parseTime(scope.row.createTime) }}
