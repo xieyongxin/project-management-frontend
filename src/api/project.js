@@ -23,3 +23,11 @@ export function getProject(projectId) {
     silentErrorStatus: [404]
   })
 }
+
+export function listProjectMembers(projectId) {
+  return request({
+    url: '/project/' + projectId + '/members',
+    method: 'get',
+    silentErrorStatus: [404]
+  })
+}
