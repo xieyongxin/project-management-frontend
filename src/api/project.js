@@ -16,6 +16,15 @@ export function createProject(data) {
   })
 }
 
+export function updateProjectName(projectId, data) {
+  return request({
+    url: '/project/' + projectId,
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404, 409]
+  })
+}
+
 export function getProject(projectId) {
   return request({
     url: '/project/' + projectId,

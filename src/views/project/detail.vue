@@ -15,7 +15,15 @@
     <template v-else-if="project">
       <div class="project-heading">
         <el-button link icon="ArrowLeft" @click="backToList">项目列表</el-button>
-        <h2>{{ project.projectName }}</h2>
+        <div v-if="canEditMemberRoles && nameEditing" class="project-name-editor">
+          <el-input v-model="projectNameDraft" maxlength="255" @keyup.enter="saveProjectName" />
+          <el-button type="primary" :loading="nameSaving" @click="saveProjectName">保存</el-button>
+          <el-button :disabled="nameSaving" @click="cancelProjectName">取消</el-button>
+        </div>
+        <div v-else class="project-name-display">
+          <h2>{{ project.projectName }}</h2>
+          <el-button v-if="canEditMemberRoles" link type="primary" @click="startProjectNameEdit">修改名称</el-button>
+        </div>
       </div>
       <el-descriptions :column="2" border>
         <el-descriptions-item label="项目编号">{{ project.projectId }}</el-descriptions-item>
@@ -79,7 +87,7 @@
 </template>
 
 <script setup name="ProjectDetail">
-import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberAdmin, updateProjectMemberRole } from '@/api/project'
+import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberAdmin, updateProjectMemberRole, updateProjectName } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -100,6 +108,9 @@ const roleSaving = ref(false)
 const roleOptionsError = ref(false)
 const adminSaving = ref(false)
 const adminDrafts = reactive({})
+const nameEditing = ref(false)
+const nameSaving = ref(false)
+const projectNameDraft = ref('')
 const userStore = useUserStore()
 
 function backToList() {
@@ -118,6 +129,8 @@ async function loadProject() {
   canEditMemberRoles.value = false
   Object.keys(roleDrafts).forEach(key => delete roleDrafts[key])
   Object.keys(adminDrafts).forEach(key => delete adminDrafts[key])
+  nameEditing.value = false
+  projectNameDraft.value = ''
   try {
     const response = await getProject(route.params.projectId)
     project.value = response.data
@@ -145,6 +158,7 @@ async function loadMembers() {
     })
     const currentMember = members.value.find(member => String(member.userId) === String(userStore.id))
     canEditMemberRoles.value = currentMember?.isProjectAdmin === 1
+    if (!nameEditing.value) projectNameDraft.value = project.value?.projectName || ''
     if (canEditMemberRoles.value) {
       await loadRoleOptions()
     }
@@ -215,6 +229,32 @@ async function saveMemberAdmin(member) {
   }
 }
 
+function startProjectNameEdit() {
+  projectNameDraft.value = project.value?.projectName || ''
+  nameEditing.value = true
+}
+
+function cancelProjectName() {
+  projectNameDraft.value = project.value?.projectName || ''
+  nameEditing.value = false
+}
+
+async function saveProjectName() {
+  if (nameSaving.value) return
+  nameSaving.value = true
+  try {
+    const response = await updateProjectName(route.params.projectId, { projectName: projectNameDraft.value })
+    project.value = response.data
+    projectNameDraft.value = response.data.projectName
+    nameEditing.value = false
+    proxy?.$modal?.msgSuccess?.('项目名称已更新')
+  } catch (_error) {
+    projectNameDraft.value = project.value?.projectName || ''
+  } finally {
+    nameSaving.value = false
+  }
+}
+
 watch(() => route.params.projectId, loadProject)
 onMounted(loadProject)
 </script>
@@ -230,6 +270,21 @@ onMounted(loadProject)
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.project-name-display,
+.project-name-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-name-editor {
+  width: min(100%, 640px);
+}
+
+.project-name-editor .el-input {
+  flex: 1;
 }
 
 .section-heading {
