@@ -118,3 +118,20 @@ export function createProjectRequirement(projectId, data) {
     silentErrorStatus: [400, 403, 404]
   })
 }
+
+export function listProjectTaskOptions(projectId) {
+  return request({
+    url: '/project/' + projectId + '/tasks/options',
+    method: 'get',
+    silentErrorStatus: [403, 404]
+  })
+}
+
+export function createProjectTask(projectId, data) {
+  return request({
+    url: '/project/' + projectId + '/tasks',
+    method: 'post',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
