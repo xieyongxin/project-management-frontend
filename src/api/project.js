@@ -92,3 +92,29 @@ export function listProjectOperationLogs(projectId, query) {
     silentErrorStatus: [403, 404]
   })
 }
+
+export function listProjectRequirements(projectId, query) {
+  return request({
+    url: '/project/' + projectId + '/requirements',
+    method: 'get',
+    params: query,
+    silentErrorStatus: [403, 404]
+  })
+}
+
+export function listProjectRequirementStatuses(projectId) {
+  return request({
+    url: '/project/' + projectId + '/requirements/statuses',
+    method: 'get',
+    silentErrorStatus: [403, 404]
+  })
+}
+
+export function createProjectRequirement(projectId, data) {
+  return request({
+    url: '/project/' + projectId + '/requirements',
+    method: 'post',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
