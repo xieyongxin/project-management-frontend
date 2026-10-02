@@ -71,6 +71,26 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/project',
+    component: Layout,
+    redirect: '/project/index',
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/project/index.vue'),
+        name: 'ProjectList',
+        meta: { title: '项目管理', icon: 'list' }
+      },
+      {
+        path: 'detail/:projectId(\\d+)',
+        component: () => import('@/views/project/detail.vue'),
+        name: 'ProjectDetail',
+        hidden: true,
+        meta: { title: '项目详情', activeMenu: '/project/index' }
+      }
+    ]
+  },
+  {
     path: '/lock',
     component: () => import('@/views/lock'),
     hidden: true,

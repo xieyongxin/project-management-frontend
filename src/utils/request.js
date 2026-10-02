@@ -109,6 +109,9 @@ service.interceptors.response.use(res => {
     }
   },
   error => {
+    if (error.config?.silentErrorStatus?.includes(error.response?.status)) {
+      return Promise.reject(error)
+    }
     console.log('err' + error)
     let { message } = error
     if (message == "Network Error") {
