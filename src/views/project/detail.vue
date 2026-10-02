@@ -31,12 +31,32 @@
           <el-button link type="primary" @click="loadMembers">重试</el-button>
         </template>
       </el-alert>
+      <el-alert v-if="roleOptionsError" title="项目角色选项加载失败" type="error" show-icon :closable="false" class="mb8">
+        <template #default>
+          <span>项目成员仍可查看；请重试后再修改角色。</span>
+          <el-button link type="primary" @click="loadRoleOptions">重试</el-button>
+        </template>
+      </el-alert>
       <el-table v-loading="membersLoading" :data="members">
         <el-table-column label="用户名" prop="userName" min-width="140" />
         <el-table-column label="昵称" prop="nickName" min-width="140" />
         <el-table-column label="邮箱" prop="email" min-width="190" />
-        <el-table-column label="全局角色" prop="roleName" min-width="140">
-          <template #default="scope">{{ scope.row.roleName || '未设置' }}</template>
+        <el-table-column label="全局角色" prop="roleName" min-width="190">
+          <template #default="scope">
+            <el-select
+              v-if="canEditMemberRoles"
+              v-model="roleDrafts[scope.row.userId]"
+              placeholder="请选择角色"
+              :clearable="false"
+              :loading="rolesLoading"
+              :disabled="rolesLoading || roleSaving || roleOptionsError"
+              style="width: 160px"
+              @change="saveMemberRole(scope.row)"
+            >
+              <el-option v-for="role in roleOptions" :key="role.roleId" :label="role.roleName" :value="role.roleId" />
+            </el-select>
+            <span v-else>{{ scope.row.roleName || '未设置' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="项目管理员" width="120">
           <template #default="scope">
@@ -50,10 +70,12 @@
 </template>
 
 <script setup name="ProjectDetail">
-import { getProject, listProjectMembers } from '@/api/project'
+import { getProject, listProjectMemberRoles, listProjectMembers, updateProjectMemberRole } from '@/api/project'
+import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const { proxy } = getCurrentInstance()
 const loading = ref(false)
 const notFound = ref(false)
 const loadError = ref(false)
@@ -61,6 +83,13 @@ const project = ref(null)
 const members = ref([])
 const membersLoading = ref(false)
 const membersError = ref(false)
+const roleOptions = ref([])
+const roleDrafts = reactive({})
+const canEditMemberRoles = ref(false)
+const rolesLoading = ref(false)
+const roleSaving = ref(false)
+const roleOptionsError = ref(false)
+const userStore = useUserStore()
 
 function backToList() {
   router.push('/project/index')
@@ -73,6 +102,10 @@ async function loadProject() {
   project.value = null
   members.value = []
   membersError.value = false
+  roleOptions.value = []
+  roleOptionsError.value = false
+  canEditMemberRoles.value = false
+  Object.keys(roleDrafts).forEach(key => delete roleDrafts[key])
   try {
     const response = await getProject(route.params.projectId)
     project.value = response.data
@@ -94,6 +127,14 @@ async function loadMembers() {
   try {
     const response = await listProjectMembers(route.params.projectId)
     members.value = response.data || []
+    members.value.forEach(member => {
+      roleDrafts[member.userId] = member.roleId
+    })
+    const currentMember = members.value.find(member => String(member.userId) === String(userStore.id))
+    canEditMemberRoles.value = currentMember?.isProjectAdmin === 1
+    if (canEditMemberRoles.value) {
+      await loadRoleOptions()
+    }
   } catch (error) {
     if (error.response?.status === 404) {
       notFound.value = true
@@ -104,6 +145,41 @@ async function loadMembers() {
     }
   } finally {
     membersLoading.value = false
+  }
+}
+
+async function loadRoleOptions() {
+  rolesLoading.value = true
+  roleOptionsError.value = false
+  try {
+    const response = await listProjectMemberRoles(route.params.projectId)
+    roleOptions.value = response.data || []
+  } catch (_error) {
+    roleOptions.value = []
+    roleOptionsError.value = true
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
+async function saveMemberRole(member) {
+  if (roleSaving.value) return
+  const roleId = roleDrafts[member.userId]
+  if (!roleId) {
+    roleDrafts[member.userId] = member.roleId
+    proxy?.$modal?.msgError?.('项目角色不能为空')
+    return
+  }
+  roleSaving.value = true
+  try {
+    const response = await updateProjectMemberRole(route.params.projectId, member.userId, { roleId })
+    member.roleId = response.data.roleId
+    member.roleName = response.data.roleName
+    proxy?.$modal?.msgSuccess?.('项目角色已更新')
+  } catch (_error) {
+    roleDrafts[member.userId] = member.roleId
+  } finally {
+    roleSaving.value = false
   }
 }
 

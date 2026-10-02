@@ -31,3 +31,20 @@ export function listProjectMembers(projectId) {
     silentErrorStatus: [404]
   })
 }
+
+export function listProjectMemberRoles(projectId) {
+  return request({
+    url: '/project/' + projectId + '/members/roles',
+    method: 'get',
+    silentErrorStatus: [403, 404]
+  })
+}
+
+export function updateProjectMemberRole(projectId, userId, data) {
+  return request({
+    url: '/project/' + projectId + '/members/' + userId + '/role',
+    method: 'put',
+    data,
+    silentErrorStatus: [403, 404]
+  })
+}
