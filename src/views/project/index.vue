@@ -1,5 +1,11 @@
 <template>
   <div class="app-container">
+    <el-alert v-if="listError" title="项目列表加载失败" type="error" show-icon :closable="false" class="mb8">
+      <template #default>
+        <span>请检查网络或登录状态后重试。</span>
+        <el-button link type="primary" @click="getList">重试</el-button>
+      </template>
+    </el-alert>
     <el-form ref="queryRef" :model="queryParams" :inline="true" @submit.prevent>
       <el-form-item label="项目名称" prop="projectName">
         <el-input
@@ -49,6 +55,7 @@
     />
 
     <el-dialog v-model="createOpen" title="新建项目" width="460px" append-to-body>
+      <el-alert v-if="createError" :title="createError" type="error" show-icon :closable="false" class="mb8" />
       <el-form ref="createRef" :model="createForm" :rules="rules" label-width="90px">
         <el-form-item label="项目名称" prop="projectName">
           <el-input
@@ -76,6 +83,8 @@ const router = useRouter()
 
 const loading = ref(false)
 const creating = ref(false)
+const listError = ref(false)
+const createError = ref('')
 const createOpen = ref(false)
 const projectList = ref([])
 const total = ref(0)
@@ -101,12 +110,17 @@ function validateProjectName(_rule, value, callback) {
 
 function getList() {
   loading.value = true
+  listError.value = false
   listProjects(queryParams)
     .then(response => {
       projectList.value = response.rows || []
       total.value = response.total || 0
     })
-    .catch(() => {})
+    .catch(() => {
+      projectList.value = []
+      total.value = 0
+      listError.value = true
+    })
     .finally(() => {
       loading.value = false
     })
@@ -125,6 +139,7 @@ function resetQuery() {
 
 function openCreate() {
   createForm.projectName = ''
+  createError.value = ''
   createOpen.value = true
   nextTick(() => createRef.value?.clearValidate())
 }
@@ -133,12 +148,14 @@ function submitCreate() {
   createRef.value?.validate(async valid => {
     if (!valid || creating.value) return
     creating.value = true
+    createError.value = ''
     try {
       await createProject({ projectName: createForm.projectName.trim() })
       proxy.$modal.msgSuccess('创建成功')
       createOpen.value = false
       handleQuery()
-    } catch {
+    } catch (error) {
+      createError.value = error?.message || '创建失败，请检查权限或项目名称后重试。'
     } finally {
       creating.value = false
     }
