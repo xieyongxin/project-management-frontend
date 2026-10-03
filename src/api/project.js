@@ -135,6 +135,15 @@ export function listProjectRequirementVersions(projectId, requirementId) {
   })
 }
 
+export function updateProjectRequirementStatus(projectId, requirementId, data) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/status',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',
