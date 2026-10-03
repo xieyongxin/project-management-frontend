@@ -135,6 +135,15 @@ export function listProjectRequirementVersions(projectId, requirementId) {
   })
 }
 
+export function compareProjectRequirementVersions(projectId, requirementId, leftVersionId, rightVersionId) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/versions/compare',
+    method: 'get',
+    params: { leftVersionId, rightVersionId },
+    silentErrorStatus: [400, 404]
+  })
+}
+
 export function updateProjectRequirementStatus(projectId, requirementId, data) {
   return request({
     url: '/project/' + projectId + '/requirements/' + requirementId + '/status',
