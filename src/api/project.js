@@ -160,3 +160,19 @@ export function listProjectTasks(projectId, query) {
     silentErrorStatus: [403, 404]
   })
 }
+
+export function getProjectTask(projectId, taskId) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId,
+    method: 'get',
+    silentErrorStatus: [404]
+  })
+}
+
+export function listProjectTaskVersions(projectId, taskId) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId + '/versions',
+    method: 'get',
+    silentErrorStatus: [404]
+  })
+}
