@@ -103,6 +103,13 @@ export const constantRoutes = [
         meta: { title: '创建需求', activeMenu: '/project/index' }
       },
       {
+        path: 'requirements/:projectId(\\d+)/:requirementId(\\d+)',
+        component: () => import('@/views/project/requirement-detail.vue'),
+        name: 'ProjectRequirementDetail',
+        hidden: true,
+        meta: { title: '需求详情', activeMenu: '/project/index' }
+      },
+      {
         path: 'tasks/:projectId(\\d+)',
         component: () => import('@/views/project/tasks.vue'),
         name: 'ProjectTasks',

@@ -30,7 +30,11 @@
       />
       <el-table v-loading="loading" :data="requirements">
         <el-table-column label="需求编号" prop="requirementId" width="110" />
-        <el-table-column label="标题" prop="title" min-width="240" show-overflow-tooltip />
+        <el-table-column label="标题" prop="title" min-width="240" show-overflow-tooltip>
+          <template #default="scope">
+            <el-link type="primary" @click="openDetail(scope.row)">{{ scope.row.title }}</el-link>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" min-width="120">
           <template #default="scope">
             {{ scope.row.statusLabel || scope.row.status || '—' }}
@@ -84,6 +88,10 @@ function backToProject() {
 
 function openCreate() {
   router.push(`/project/requirements/${route.params.projectId}/create`)
+}
+
+function openDetail(requirement) {
+  router.push(`/project/requirements/${route.params.projectId}/${requirement.requirementId}`)
 }
 
 function ownerNames(requirement) {

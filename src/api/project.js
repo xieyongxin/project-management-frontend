@@ -153,6 +153,15 @@ export function updateProjectRequirementStatus(projectId, requirementId, data) {
   })
 }
 
+export function updateProjectRequirementContent(projectId, requirementId, data) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/content',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',
