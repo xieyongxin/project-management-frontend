@@ -43,7 +43,12 @@
         </el-table-column>
         <el-table-column label="依据需求" min-width="150">
           <template #default="scope">
-            {{ requirementReference(scope.row) }}
+            <div class="requirement-reference">
+              <span>{{ requirementReference(scope.row) }}</span>
+              <el-tag v-if="scope.row.requirementVersionOutdated === 1" type="warning" size="small">
+                需求有新版本
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="分类" min-width="150" show-overflow-tooltip>
@@ -151,5 +156,12 @@ onMounted(loadTasks)
   font-size: 20px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.requirement-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 </style>
