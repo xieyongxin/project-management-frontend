@@ -186,6 +186,15 @@ export function listProjectTaskVersions(projectId, taskId) {
   })
 }
 
+export function compareProjectTaskVersions(projectId, taskId, leftVersionId, rightVersionId) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId + '/versions/compare',
+    method: 'get',
+    params: { leftVersionId, rightVersionId },
+    silentErrorStatus: [400, 404]
+  })
+}
+
 export function updateProjectTaskStatus(projectId, taskId, data) {
   return request({
     url: '/project/' + projectId + '/tasks/' + taskId + '/status',
