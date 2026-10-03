@@ -101,7 +101,16 @@
       <template v-if="canViewProjectRequirements">
         <div class="section-heading">
           <h3>项目需求</h3>
-          <el-button link type="primary" @click="openRequirements">查看需求列表</el-button>
+          <div class="section-actions">
+            <el-button v-if="canAddProjectRequirements" link type="primary" @click="openRequirementCreate">新建需求</el-button>
+            <el-button link type="primary" @click="openRequirements">查看需求列表</el-button>
+          </div>
+        </div>
+      </template>
+      <template v-if="!canViewProjectRequirements && canAddProjectRequirements">
+        <div class="section-heading">
+          <h3>项目需求</h3>
+          <el-button link type="primary" @click="openRequirementCreate">新建需求</el-button>
         </div>
       </template>
       <template v-if="canViewProjectLogs">
@@ -173,6 +182,8 @@ const canViewProjectLogs = computed(() => userStore.permissions?.includes('*:*:*
   || userStore.permissions?.includes('project:log:list'))
 const canViewProjectRequirements = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:list'))
+const canAddProjectRequirements = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:requirement:add'))
 
 function backToList() {
   router.push('/project/index')
@@ -180,6 +191,10 @@ function backToList() {
 
 function openRequirements() {
   router.push(`/project/requirements/${route.params.projectId}`)
+}
+
+function openRequirementCreate() {
+  router.push(`/project/requirements/${route.params.projectId}/create`)
 }
 
 async function loadProject() {
@@ -410,5 +425,10 @@ onMounted(loadProject)
 .section-heading h3 {
   margin: 0;
   font-size: 16px;
+}
+
+.section-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

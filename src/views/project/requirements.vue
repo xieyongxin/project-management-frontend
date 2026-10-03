@@ -15,7 +15,10 @@
     <template v-else>
       <div class="page-heading">
         <el-button link icon="ArrowLeft" @click="backToProject">项目详情</el-button>
-        <h2>项目需求</h2>
+        <div class="page-heading-row">
+          <h2>项目需求</h2>
+          <el-button v-if="canCreateRequirement" type="primary" @click="openCreate">新建需求</el-button>
+        </div>
       </div>
       <el-alert
         v-if="!requirements.length && total === 0"
@@ -58,9 +61,11 @@
 
 <script setup name="ProjectRequirements">
 import { listProjectRequirements } from '@/api/project'
+import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const notFound = ref(false)
 const loadError = ref(false)
@@ -70,9 +75,15 @@ const queryParams = reactive({
   pageNum: 1,
   pageSize: 10
 })
+const canCreateRequirement = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:requirement:add'))
 
 function backToProject() {
   router.push(`/project/detail/${route.params.projectId}`)
+}
+
+function openCreate() {
+  router.push(`/project/requirements/${route.params.projectId}/create`)
 }
 
 function ownerNames(requirement) {
@@ -119,5 +130,12 @@ onMounted(loadRequirements)
   font-size: 20px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.page-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 </style>
