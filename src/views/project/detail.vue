@@ -98,6 +98,12 @@
           </template>
         </el-table-column>
       </el-table>
+      <template v-if="canViewProjectRequirements">
+        <div class="section-heading">
+          <h3>项目需求</h3>
+          <el-button link type="primary" @click="openRequirements">查看需求列表</el-button>
+        </div>
+      </template>
       <template v-if="canViewProjectLogs">
         <div class="section-heading">
           <h3>项目操作日志</h3>
@@ -165,9 +171,15 @@ const logsError = ref(false)
 const userStore = useUserStore()
 const canViewProjectLogs = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:log:list'))
+const canViewProjectRequirements = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:requirement:list'))
 
 function backToList() {
   router.push('/project/index')
+}
+
+function openRequirements() {
+  router.push(`/project/requirements/${route.params.projectId}`)
 }
 
 async function loadProject() {

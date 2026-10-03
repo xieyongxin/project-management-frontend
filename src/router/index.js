@@ -87,6 +87,13 @@ export const constantRoutes = [
         name: 'ProjectDetail',
         hidden: true,
         meta: { title: '项目详情', activeMenu: '/project/index' }
+      },
+      {
+        path: 'requirements/:projectId(\\d+)',
+        component: () => import('@/views/project/requirements.vue'),
+        name: 'ProjectRequirements',
+        hidden: true,
+        meta: { title: '项目需求', activeMenu: '/project/index' }
       }
     ]
   },
