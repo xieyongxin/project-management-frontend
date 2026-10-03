@@ -151,3 +151,12 @@ export function createProjectTask(projectId, data) {
     silentErrorStatus: [400, 403, 404]
   })
 }
+
+export function listProjectTasks(projectId, query) {
+  return request({
+    url: '/project/' + projectId + '/tasks',
+    method: 'get',
+    params: query,
+    silentErrorStatus: [403, 404]
+  })
+}

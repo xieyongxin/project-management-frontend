@@ -113,6 +113,12 @@
           <el-button link type="primary" @click="openRequirementCreate">新建需求</el-button>
         </div>
       </template>
+      <template v-if="canViewProjectTasks">
+        <div class="section-heading">
+          <h3>项目任务</h3>
+          <el-button link type="primary" @click="openTasks">查看任务列表</el-button>
+        </div>
+      </template>
       <template v-if="canViewProjectLogs">
         <div class="section-heading">
           <h3>项目操作日志</h3>
@@ -184,6 +190,8 @@ const canViewProjectRequirements = computed(() => userStore.permissions?.include
   || userStore.permissions?.includes('project:requirement:list'))
 const canAddProjectRequirements = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:add'))
+const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:list'))
 
 function backToList() {
   router.push('/project/index')
@@ -195,6 +203,10 @@ function openRequirements() {
 
 function openRequirementCreate() {
   router.push(`/project/requirements/${route.params.projectId}/create`)
+}
+
+function openTasks() {
+  router.push(`/project/tasks/${route.params.projectId}`)
 }
 
 async function loadProject() {
