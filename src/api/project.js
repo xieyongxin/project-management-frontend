@@ -176,3 +176,12 @@ export function listProjectTaskVersions(projectId, taskId) {
     silentErrorStatus: [404]
   })
 }
+
+export function updateProjectTaskStatus(projectId, taskId, data) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId + '/status',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
