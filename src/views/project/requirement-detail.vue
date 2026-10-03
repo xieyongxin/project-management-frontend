@@ -16,16 +16,33 @@
       <div class="page-heading">
         <el-button link icon="ArrowLeft" @click="backToRequirements">项目需求</el-button>
         <div class="page-heading-row">
-          <h2>需求 #{{ requirement.requirementId }}</h2>
+          <div class="title-with-status">
+            <h2>需求 #{{ requirement.requirementId }}</h2>
+            <el-tag v-if="isDeleted" type="info">已删除</el-tag>
+          </div>
           <el-button
-            v-if="canEditRequirement && !editing"
+            v-if="canEditRequirement && !editing && !isDeleted"
             type="primary"
             @click="startEditing"
           >编辑内容</el-button>
+          <el-button
+            v-if="canDeleteRequirement && !editing && !isDeleted"
+            type="danger"
+            plain
+            @click="deleteRequirement"
+          >删除需求</el-button>
         </div>
       </div>
 
       <el-alert v-if="submitError" :title="submitError" type="error" show-icon :closable="false" class="mb8" />
+      <el-alert
+        v-if="isDeleted"
+        title="该需求已删除，历史内容和版本仍可查看。"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb8"
+      />
 
       <el-card shadow="never" class="mb16">
         <template #header>
@@ -62,7 +79,10 @@
         <el-empty v-if="!versions.length" description="暂无版本历史" />
         <el-table v-else :data="versions" row-key="versionId">
           <el-table-column label="版本" width="100">
-            <template #default="scope">v{{ scope.row.versionNo }}</template>
+            <template #default="scope">
+              <span>v{{ scope.row.versionNo }}</span>
+              <el-tag v-if="Number(scope.row.isDeleted) === 1" type="info" size="small" class="deleted-tag">已删除</el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="标题" prop="title" min-width="260" show-overflow-tooltip />
           <el-table-column label="创建时间" prop="createTime" min-width="180">
@@ -81,6 +101,9 @@
       <template v-if="selectedVersion">
         <el-descriptions :column="1" border class="mb16">
           <el-descriptions-item label="标题">{{ selectedVersion.title }}</el-descriptions-item>
+          <el-descriptions-item v-if="Number(selectedVersion.isDeleted) === 1" label="状态">
+            <el-tag type="info">已删除</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ parseTime(selectedVersion.createTime) }}</el-descriptions-item>
         </el-descriptions>
         <div class="content-label">正文</div>
@@ -92,6 +115,7 @@
 
 <script setup name="ProjectRequirementDetail">
 import {
+  deleteProjectRequirement,
   getProjectRequirement,
   listProjectRequirementVersions,
   updateProjectRequirementContent
@@ -100,6 +124,7 @@ import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const { proxy } = getCurrentInstance()
 const userStore = useUserStore()
 const loading = ref(false)
 const submitting = ref(false)
@@ -117,6 +142,9 @@ const versionContent = ref('')
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
+const canDeleteRequirement = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:requirement:delete'))
+const isDeleted = computed(() => Number(requirement.value?.isDeleted) === 1)
 const ownerNames = computed(() => (requirement.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
   .join('、'))
@@ -164,6 +192,26 @@ async function saveContent() {
     await loadVersions()
   } catch (error) {
     submitError.value = error?.response?.data?.msg || error?.message || '需求内容保存失败，请检查项目权限。'
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function deleteRequirement() {
+  if (submitting.value || isDeleted.value) return
+  try {
+    await proxy?.$modal?.confirm?.('确认逻辑删除该需求吗？删除后将不能恢复，但项目成员仍可查看历史内容和版本。')
+  } catch (_error) {
+    return
+  }
+  submitting.value = true
+  submitError.value = ''
+  try {
+    await deleteProjectRequirement(route.params.projectId, route.params.requirementId)
+    proxy?.$modal?.msgSuccess?.('需求已删除')
+    backToRequirements()
+  } catch (error) {
+    submitError.value = error?.response?.data?.msg || error?.message || '需求删除失败，请检查项目权限和任务关联。'
   } finally {
     submitting.value = false
   }
@@ -229,6 +277,16 @@ onMounted(loadDetail)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.title-with-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deleted-tag {
+  margin-left: 6px;
 }
 
 .requirement-form {

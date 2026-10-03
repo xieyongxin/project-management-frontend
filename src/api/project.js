@@ -162,6 +162,14 @@ export function updateProjectRequirementContent(projectId, requirementId, data) 
   })
 }
 
+export function deleteProjectRequirement(projectId, requirementId) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId,
+    method: 'delete',
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',

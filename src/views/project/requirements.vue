@@ -33,6 +33,7 @@
         <el-table-column label="标题" prop="title" min-width="240" show-overflow-tooltip>
           <template #default="scope">
             <el-link type="primary" @click="openDetail(scope.row)">{{ scope.row.title }}</el-link>
+            <el-tag v-if="isDeleted(scope.row)" type="info" size="small" class="deleted-tag">已删除</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="状态" min-width="120">
@@ -100,6 +101,10 @@ function ownerNames(requirement) {
     .join('、')
 }
 
+function isDeleted(requirement) {
+  return Number(requirement?.isDeleted) === 1
+}
+
 async function loadRequirements() {
   loading.value = true
   notFound.value = false
@@ -145,5 +150,9 @@ onMounted(loadRequirements)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.deleted-tag {
+  margin-left: 8px;
 }
 </style>
