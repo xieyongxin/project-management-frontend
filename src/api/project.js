@@ -162,6 +162,15 @@ export function updateProjectRequirementContent(projectId, requirementId, data) 
   })
 }
 
+export function updateProjectRequirementOwners(projectId, requirementId, data) {
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/owners',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function deleteProjectRequirement(projectId, requirementId) {
   return request({
     url: '/project/' + projectId + '/requirements/' + requirementId,
@@ -275,6 +284,15 @@ export function compareProjectTaskVersions(projectId, taskId, leftVersionId, rig
 export function updateProjectTaskStatus(projectId, taskId, data) {
   return request({
     url: '/project/' + projectId + '/tasks/' + taskId + '/status',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
+export function updateProjectTaskFields(projectId, taskId, data) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId + '/fields',
     method: 'put',
     data,
     silentErrorStatus: [400, 403, 404]

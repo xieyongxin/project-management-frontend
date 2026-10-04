@@ -26,6 +26,11 @@
             @click="startEditing"
           >编辑内容</el-button>
           <el-button
+            v-if="canEditRequirement && !editing && !isDeleted"
+            plain
+            @click="openOwnerDialog"
+          >编辑负责人</el-button>
+          <el-button
             v-if="canDeleteRequirement && !editing && !isDeleted"
             type="danger"
             plain
@@ -189,6 +194,22 @@
             target="_blank"
           >{{ attachment.originalName }}</el-link>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="ownerDialogVisible" title="编辑需求负责人" width="560px">
+      <el-alert title="负责人必须来自当前项目成员，至少选择一人。保存不会生成内容版本。" type="info" show-icon :closable="false" class="mb16" />
+      <el-select v-model="ownerForm.ownerIds" multiple filterable collapse-tags style="width: 100%" placeholder="请选择负责人">
+        <el-option
+          v-for="member in ownerMembers"
+          :key="member.userId"
+          :label="member.nickName || member.userName || member.userId"
+          :value="member.userId"
+        />
+      </el-select>
+      <template #footer>
+        <el-button :disabled="ownerSaving" @click="ownerDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="ownerSaving" @click="saveOwners">保存</el-button>
       </template>
     </el-dialog>
 
@@ -365,6 +386,7 @@ import {
   getProjectRequirement,
   listProjectRequirementVersions,
   updateProjectRequirementContent,
+  updateProjectRequirementOwners,
   uploadProjectRequirementAttachments,
   getProjectRequirementAttachmentUrl,
   previewProjectRequirementAgent,
@@ -399,6 +421,10 @@ const comparedVersions = ref([])
 const compareDialogVisible = ref(false)
 const comparing = ref(false)
 const compareError = ref('')
+const ownerDialogVisible = ref(false)
+const ownerSaving = ref(false)
+const ownerMembers = ref([])
+const ownerForm = reactive({ ownerIds: [] })
 const attachmentSubmitting = ref(false)
 const currentAttachments = computed(() => requirement.value?.attachments || [])
 const agentVisible = ref(false)
@@ -512,6 +538,38 @@ function startEditing() {
 function cancelEditing() {
   editing.value = false
   submitError.value = ''
+}
+
+async function openOwnerDialog() {
+  if (!requirement.value || !canEditRequirement.value || isDeleted.value) return
+  ownerForm.ownerIds = (requirement.value.owners || []).map(owner => owner.userId)
+  try {
+    const response = await listProjectMembers(route.params.projectId)
+    ownerMembers.value = response.data || []
+    ownerDialogVisible.value = true
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '项目成员加载失败')
+  }
+}
+
+async function saveOwners() {
+  if (ownerSaving.value || !ownerForm.ownerIds.length) {
+    if (!ownerForm.ownerIds.length) proxy?.$modal?.msgError?.('至少选择一名负责人')
+    return
+  }
+  ownerSaving.value = true
+  try {
+    const response = await updateProjectRequirementOwners(route.params.projectId, route.params.requirementId, {
+      ownerIds: ownerForm.ownerIds
+    })
+    requirement.value = response.data
+    ownerDialogVisible.value = false
+    proxy?.$modal?.msgSuccess?.('需求负责人已更新')
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '需求负责人更新失败，请检查项目权限。')
+  } finally {
+    ownerSaving.value = false
+  }
 }
 
 function contentText(value) {

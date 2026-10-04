@@ -51,6 +51,11 @@
               :loading="updateSaving"
               @click="openUpdateDialog"
             >按最新需求更新</el-button>
+            <el-button
+              v-if="canEditTaskFields"
+              plain
+              @click="openFieldsDialog"
+            >编辑分类/负责人</el-button>
           </div>
         </template>
         <el-alert
@@ -185,11 +190,49 @@
         <el-button type="primary" :loading="updateSaving" @click="submitLatestVersionUpdate">保存新版本</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="fieldsDialogVisible" title="编辑任务分类和负责人" width="620px">
+      <el-alert title="分类至少选择一项，负责人至少选择一人且必须是当前项目成员。保存不会生成内容版本。" type="info" show-icon :closable="false" class="mb16" />
+      <el-form label-width="90px">
+        <el-form-item label="任务分类">
+          <el-select v-model="fieldsForm.categoryValues" multiple filterable collapse-tags style="width: 100%" placeholder="请选择分类">
+            <el-option
+              v-for="item in fieldOptions.categories"
+              :key="item.dictValue"
+              :label="item.dictLabel"
+              :value="item.dictValue"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="负责人">
+          <el-select v-model="fieldsForm.ownerIds" multiple filterable collapse-tags style="width: 100%" placeholder="请选择负责人">
+            <el-option
+              v-for="member in fieldOptions.members"
+              :key="member.userId"
+              :label="member.nickName || member.userName || member.userId"
+              :value="member.userId"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="fieldsSaving" @click="fieldsDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="fieldsSaving" @click="saveFields">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ProjectTaskDetail">
-import { compareProjectTaskVersions, getProjectTask, listProjectTaskVersions, updateProjectTaskLatestVersion } from '@/api/project'
+import {
+  compareProjectTaskVersions,
+  getProjectTask,
+  listProjectTaskVersions,
+  updateProjectTaskLatestVersion,
+  updateProjectTaskFields,
+  listProjectTaskOptions,
+  listProjectMembers
+} from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
@@ -215,6 +258,10 @@ const updateRules = {
   title: [{ required: true, message: '任务标题不能为空', trigger: 'blur' }],
   description: [{ required: true, message: '任务说明不能为空', trigger: 'blur' }]
 }
+const fieldsDialogVisible = ref(false)
+const fieldsSaving = ref(false)
+const fieldsForm = reactive({ categoryValues: [], ownerIds: [] })
+const fieldOptions = reactive({ categories: [], members: [] })
 const userStore = useUserStore()
 
 const isDeleted = computed(() => Number(task.value?.isDeleted) === 1)
@@ -225,6 +272,9 @@ const ownerNames = computed(() => (task.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
   .join('、'))
 const canUpdateLatestVersion = computed(() => !isDeleted.value && (userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:edit')
+  || userStore.permissions?.includes('project:agent:split')))
+const canEditTaskFields = computed(() => !isDeleted.value && (userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:edit')
   || userStore.permissions?.includes('project:agent:split')))
 
@@ -267,6 +317,45 @@ async function submitLatestVersionUpdate() {
     proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '任务新版本保存失败，请检查项目权限。')
   } finally {
     updateSaving.value = false
+  }
+}
+
+async function openFieldsDialog() {
+  if (!task.value || !canEditTaskFields.value) return
+  fieldsForm.categoryValues = (task.value.categories || []).map(item => item.categoryValue)
+  fieldsForm.ownerIds = (task.value.owners || []).map(item => item.userId)
+  try {
+    const [options, members] = await Promise.all([
+      listProjectTaskOptions(route.params.projectId),
+      listProjectMembers(route.params.projectId)
+    ])
+    fieldOptions.categories = options.data?.categories || []
+    fieldOptions.members = members.data || []
+    fieldsDialogVisible.value = true
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '任务编辑选项加载失败')
+  }
+}
+
+async function saveFields() {
+  if (fieldsSaving.value) return
+  if (!fieldsForm.categoryValues.length || !fieldsForm.ownerIds.length) {
+    proxy?.$modal?.msgError?.('至少选择一个分类和一名负责人')
+    return
+  }
+  fieldsSaving.value = true
+  try {
+    const response = await updateProjectTaskFields(route.params.projectId, route.params.taskId, {
+      categoryValues: fieldsForm.categoryValues,
+      ownerIds: fieldsForm.ownerIds
+    })
+    task.value = response.data
+    fieldsDialogVisible.value = false
+    proxy?.$modal?.msgSuccess?.('任务分类和负责人已更新')
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '任务字段更新失败，请检查项目权限。')
+  } finally {
+    fieldsSaving.value = false
   }
 }
 
