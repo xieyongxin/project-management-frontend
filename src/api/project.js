@@ -212,6 +212,15 @@ export function listProjectRequirementAgentCalls(projectId, requirementId) {
   })
 }
 
+export function retryProjectRequirementAgentCall(projectId, requirementId, callId, data) {
+  return request({
+    url: `/project/${projectId}/requirements/${requirementId}/agent/calls/${callId}/retry`,
+    method: 'post',
+    data,
+    silentErrorStatus: [400, 403, 404, 409]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',

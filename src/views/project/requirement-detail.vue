@@ -305,6 +305,7 @@
               <el-descriptions-item label="模型">{{ scope.row.model || '—' }}</el-descriptions-item>
               <el-descriptions-item label="允许外发">{{ Number(scope.row.externalEnabled) === 1 ? '是' : '否' }}</el-descriptions-item>
               <el-descriptions-item label="幂等键">{{ scope.row.idempotencyKey || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="重试次数">{{ scope.row.retryCount || 0 }}</el-descriptions-item>
               <el-descriptions-item label="所选附件" :span="2">
                 <pre class="agent-call-content">{{ formatJson(scope.row.selectedAttachmentSnapshot) }}</pre>
               </el-descriptions-item>
@@ -341,6 +342,17 @@
         <el-table-column label="调用时间" min-width="180">
           <template #default="scope">{{ parseTime(scope.row.createTime) }}</template>
         </el-table-column>
+        <el-table-column v-if="canUseAgent" label="操作" width="100" fixed="right">
+          <template #default="scope">
+            <el-button
+              v-if="scope.row.status === 'FAILED'"
+              link
+              type="primary"
+              :loading="retryingCallId === scope.row.callId"
+              @click="retryAgentCall(scope.row)"
+            >重试</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-dialog>
   </div>
@@ -358,6 +370,7 @@ import {
   previewProjectRequirementAgent,
   callProjectRequirementAgent,
   listProjectRequirementAgentCalls,
+  retryProjectRequirementAgentCall,
   createProjectTask,
   listProjectMembers,
   listProjectTaskOptions
@@ -402,6 +415,7 @@ const agentCallsVisible = ref(false)
 const agentCallsLoading = ref(false)
 const agentCallsError = ref('')
 const agentCalls = ref([])
+const retryingCallId = ref(null)
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
@@ -456,6 +470,36 @@ function agentCallStatusType(status) {
   if (status === 'SUCCESS') return 'success'
   if (status === 'FAILED' || status === 'TIMEOUT' || status === 'CANCELLED') return 'danger'
   return 'info'
+}
+
+async function retryAgentCall(call) {
+  if (!call || call.status !== 'FAILED' || retryingCallId.value !== null) return
+  try {
+    await proxy?.$modal?.confirm?.('确认使用该次调用保存的相同输入重试 Agent 吗？')
+  } catch (_error) {
+    return
+  }
+  retryingCallId.value = call.callId
+  try {
+    const response = await retryProjectRequirementAgentCall(
+      route.params.projectId,
+      route.params.requirementId,
+      call.callId,
+      { confirmed: true, idempotencyKey: `retry-${call.callId}-${Date.now()}` }
+    )
+    await loadAgentCalls()
+    if (response.data?.draftTasks) {
+      agentCall.value = response.data
+      agentDrafts.value = parseDrafts(response.data.draftTasks)
+      await loadAgentTaskOptions()
+      agentResultVisible.value = true
+    }
+    proxy?.$modal?.msgSuccess?.(response.data?.status === 'SUCCESS' ? 'Agent 重试成功' : 'Agent 重试仍然失败')
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || 'Agent 重试失败')
+  } finally {
+    retryingCallId.value = null
+  }
 }
 
 function startEditing() {
