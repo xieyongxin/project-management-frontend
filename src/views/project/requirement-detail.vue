@@ -37,6 +37,12 @@
             plain
             @click="openAgent"
           >Agent 拆分任务</el-button>
+          <el-button
+            v-if="canViewAgentLogs && !editing"
+            type="info"
+            plain
+            @click="openAgentCalls"
+          >Agent 调用记录</el-button>
         </div>
       </div>
 
@@ -272,6 +278,71 @@
         <el-button type="primary" :loading="agentSaving" :disabled="!agentDrafts.length" @click="saveAgentDrafts">批量保存正式任务</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="agentCallsVisible" title="Agent 调用记录" width="1120px" @open="loadAgentCalls">
+      <el-alert
+        v-if="agentCallsError"
+        title="Agent 调用记录加载失败"
+        type="error"
+        show-icon
+        :closable="false"
+        class="mb8"
+      >
+        <template #default>
+          <span>{{ agentCallsError }}</span>
+          <el-button link type="primary" @click="loadAgentCalls">重试</el-button>
+        </template>
+      </el-alert>
+      <el-skeleton v-if="agentCallsLoading" :rows="5" animated />
+      <el-empty v-else-if="!agentCalls.length" description="暂无 Agent 调用记录" />
+      <el-table v-else :data="agentCalls" row-key="callId" border>
+        <el-table-column type="expand">
+          <template #default="scope">
+            <el-descriptions :column="2" border class="agent-call-details">
+              <el-descriptions-item label="调用编号">{{ scope.row.callId }}</el-descriptions-item>
+              <el-descriptions-item label="锁定需求版本">{{ scope.row.requirementVersionId || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="服务商">{{ scope.row.provider || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="模型">{{ scope.row.model || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="允许外发">{{ Number(scope.row.externalEnabled) === 1 ? '是' : '否' }}</el-descriptions-item>
+              <el-descriptions-item label="幂等键">{{ scope.row.idempotencyKey || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="所选附件" :span="2">
+                <pre class="agent-call-content">{{ formatJson(scope.row.selectedAttachmentSnapshot) }}</pre>
+              </el-descriptions-item>
+              <el-descriptions-item label="需求正文" :span="2">
+                <pre class="agent-call-content">{{ scope.row.inputContent || '—' }}</pre>
+              </el-descriptions-item>
+              <el-descriptions-item label="附件解析结果" :span="2">
+                <pre class="agent-call-content">{{ formatJson(scope.row.parsedAttachmentContent) }}</pre>
+              </el-descriptions-item>
+              <el-descriptions-item label="任务草稿" :span="2">
+                <pre class="agent-call-content">{{ formatJson(scope.row.draftTasks) }}</pre>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="scope.row.errorMessage" label="失败原因" :span="2">
+                <pre class="agent-call-content">{{ scope.row.errorMessage }}</pre>
+              </el-descriptions-item>
+            </el-descriptions>
+          </template>
+        </el-table-column>
+        <el-table-column label="调用编号" prop="callId" width="110" />
+        <el-table-column label="需求版本" width="120">
+          <template #default="scope">{{ scope.row.requirementVersionId || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="服务商/模型" min-width="200" show-overflow-tooltip>
+          <template #default="scope">{{ scope.row.provider || '—' }} / {{ scope.row.model || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="120">
+          <template #default="scope">
+            <el-tag :type="agentCallStatusType(scope.row.status)">{{ scope.row.status || '—' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="允许外发" width="110">
+          <template #default="scope">{{ Number(scope.row.externalEnabled) === 1 ? '是' : '否' }}</template>
+        </el-table-column>
+        <el-table-column label="调用时间" min-width="180">
+          <template #default="scope">{{ parseTime(scope.row.createTime) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -286,6 +357,7 @@ import {
   getProjectRequirementAttachmentUrl,
   previewProjectRequirementAgent,
   callProjectRequirementAgent,
+  listProjectRequirementAgentCalls,
   createProjectTask,
   listProjectMembers,
   listProjectTaskOptions
@@ -326,6 +398,10 @@ const agentSaving = ref(false)
 const agentDrafts = ref([])
 const agentTaskOptions = reactive({ statuses: [], categories: [] })
 const agentMembers = ref([])
+const agentCallsVisible = ref(false)
+const agentCallsLoading = ref(false)
+const agentCallsError = ref('')
+const agentCalls = ref([])
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
@@ -333,6 +409,8 @@ const canDeleteRequirement = computed(() => userStore.permissions?.includes('*:*
   || userStore.permissions?.includes('project:requirement:delete'))
 const canUseAgent = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:agent:split'))
+const canViewAgentLogs = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:agent:log'))
 const isDeleted = computed(() => Number(requirement.value?.isDeleted) === 1)
 const ownerNames = computed(() => (requirement.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
@@ -341,6 +419,43 @@ const readOnlyContent = computed(() => requirement.value?.content || '<p></p>')
 
 function backToRequirements() {
   router.push(`/project/requirements/${route.params.projectId}`)
+}
+
+function openAgentCalls() {
+  agentCallsError.value = ''
+  agentCallsVisible.value = true
+}
+
+async function loadAgentCalls() {
+  if (!canViewAgentLogs.value || !requirement.value) return
+  agentCallsLoading.value = true
+  agentCallsError.value = ''
+  try {
+    const response = await listProjectRequirementAgentCalls(route.params.projectId, route.params.requirementId)
+    agentCalls.value = response.data || []
+  } catch (error) {
+    agentCalls.value = []
+    agentCallsError.value = error?.response?.status === 403
+      ? '当前账号没有 Agent 调用记录查看权限。'
+      : error?.response?.data?.msg || error?.message || '请检查项目权限或网络后重试。'
+  } finally {
+    agentCallsLoading.value = false
+  }
+}
+
+function formatJson(value) {
+  if (!value) return '—'
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch (_error) {
+    return value
+  }
+}
+
+function agentCallStatusType(status) {
+  if (status === 'SUCCESS') return 'success'
+  if (status === 'FAILED' || status === 'TIMEOUT' || status === 'CANCELLED') return 'danger'
+  return 'info'
 }
 
 function startEditing() {
@@ -746,5 +861,19 @@ onMounted(loadDetail)
 
 .agent-draft-form {
   margin-bottom: -18px;
+}
+
+.agent-call-details {
+  margin: 4px 0;
+}
+
+.agent-call-content {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 </style>

@@ -204,6 +204,14 @@ export function callProjectRequirementAgent(projectId, requirementId, data) {
   })
 }
 
+export function listProjectRequirementAgentCalls(projectId, requirementId) {
+  return request({
+    url: `/project/${projectId}/requirements/${requirementId}/agent/calls`,
+    method: 'get',
+    silentErrorStatus: [403, 404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',
