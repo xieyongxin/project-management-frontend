@@ -80,6 +80,36 @@
         </template>
       </el-card>
 
+      <el-card shadow="never" class="mb16">
+        <template #header>
+          <div class="section-title">
+            <span>当前版本附件</span>
+            <el-upload
+              v-if="canEditRequirement && !isDeleted"
+              :show-file-list="false"
+              :auto-upload="false"
+              :on-change="handleAttachmentChange"
+              :before-upload="validateAttachment"
+              multiple
+            >
+              <el-button type="primary" plain :loading="attachmentSubmitting">上传附件</el-button>
+            </el-upload>
+          </div>
+        </template>
+        <el-empty v-if="!currentAttachments.length" description="当前版本暂无附件" />
+        <el-table v-else :data="currentAttachments" row-key="attachmentId">
+          <el-table-column label="文件名" prop="originalName" min-width="260" show-overflow-tooltip />
+          <el-table-column label="大小" width="120">
+            <template #default="scope">{{ formatFileSize(scope.row.fileSize) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="scope">
+              <el-button link type="primary" @click="openAttachment(scope.row)">{{ scope.row.previewable ? '预览/下载' : '下载' }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
       <el-card shadow="never">
         <template #header>
           <div class="section-title">
@@ -137,6 +167,16 @@
         </el-descriptions>
         <div class="content-label">正文</div>
         <Editor v-model="versionContent" :min-height="260" type="base64" read-only />
+        <div v-if="selectedVersion.attachments?.length" class="content-label attachment-label">附件</div>
+        <div v-if="selectedVersion.attachments?.length" class="attachment-list">
+          <el-link
+            v-for="attachment in selectedVersion.attachments"
+            :key="attachment.attachmentId"
+            type="primary"
+            :href="getAttachmentUrl(attachment, selectedVersion.versionId)"
+            target="_blank"
+          >{{ attachment.originalName }}</el-link>
+        </div>
       </template>
     </el-dialog>
 
@@ -171,7 +211,9 @@ import {
   deleteProjectRequirement,
   getProjectRequirement,
   listProjectRequirementVersions,
-  updateProjectRequirementContent
+  updateProjectRequirementContent,
+  uploadProjectRequirementAttachments,
+  getProjectRequirementAttachmentUrl
 } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
@@ -197,6 +239,8 @@ const comparedVersions = ref([])
 const compareDialogVisible = ref(false)
 const comparing = ref(false)
 const compareError = ref('')
+const attachmentSubmitting = ref(false)
+const currentAttachments = computed(() => requirement.value?.attachments || [])
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
@@ -273,6 +317,57 @@ async function deleteRequirement() {
   } finally {
     submitting.value = false
   }
+}
+
+function validateAttachment(file) {
+  const allowed = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg']
+  const extension = String(file.name || '').split('.').pop().toLowerCase()
+  if (!allowed.includes(extension)) {
+    proxy?.$modal?.msgError?.('仅支持 PDF、DOC、DOCX、XLS、XLSX、PNG、JPG、JPEG')
+    return false
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    proxy?.$modal?.msgError?.('单个附件不能超过20MB')
+    return false
+  }
+  return true
+}
+
+async function handleAttachmentChange(uploadFile) {
+  const files = uploadFile?.raw ? [uploadFile.raw] : []
+  if (!files.length || attachmentSubmitting.value) return
+  if (files.length > 10 || files.reduce((sum, file) => sum + file.size, 0) > 100 * 1024 * 1024) {
+    proxy?.$modal?.msgError?.('当前上传附件数量或总大小超出限制')
+    return
+  }
+  attachmentSubmitting.value = true
+  try {
+    const response = await uploadProjectRequirementAttachments(route.params.projectId, route.params.requirementId, files)
+    requirement.value = response.data
+    await loadVersions()
+    proxy?.$modal?.msgSuccess?.('附件已保存并生成新版本')
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '附件上传失败')
+  } finally {
+    attachmentSubmitting.value = false
+  }
+}
+
+function formatFileSize(size) {
+  const value = Number(size || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function openAttachment(attachment) {
+  const url = getAttachmentUrl(attachment, attachment.versionId)
+  window.open(url, '_blank', 'noopener')
+}
+
+function getAttachmentUrl(attachment, versionId) {
+  return getProjectRequirementAttachmentUrl(route.params.projectId, route.params.requirementId,
+    attachment.attachmentId, versionId)
 }
 
 async function loadVersions() {
@@ -425,6 +520,13 @@ onMounted(loadDetail)
 
 .attachment-label {
   margin-top: 16px;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .attachment-snapshot {

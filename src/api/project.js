@@ -170,6 +170,23 @@ export function deleteProjectRequirement(projectId, requirementId) {
   })
 }
 
+export function uploadProjectRequirementAttachments(projectId, requirementId, files) {
+  const data = new FormData()
+  files.forEach(file => data.append('files', file))
+  return request({
+    url: '/project/' + projectId + '/requirements/' + requirementId + '/attachments',
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' },
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
+export function getProjectRequirementAttachmentUrl(projectId, requirementId, attachmentId, versionId) {
+  const query = versionId ? `?versionId=${encodeURIComponent(versionId)}` : ''
+  return `${import.meta.env.VITE_APP_BASE_API}/project/${projectId}/requirements/${requirementId}/attachments/${attachmentId}${query}`
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',
@@ -224,6 +241,15 @@ export function compareProjectTaskVersions(projectId, taskId, leftVersionId, rig
 export function updateProjectTaskStatus(projectId, taskId, data) {
   return request({
     url: '/project/' + projectId + '/tasks/' + taskId + '/status',
+    method: 'put',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
+export function updateProjectTaskLatestVersion(projectId, taskId, data) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId + '/latest-version',
     method: 'put',
     data,
     silentErrorStatus: [400, 403, 404]

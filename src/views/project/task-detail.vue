@@ -42,8 +42,25 @@
 
       <el-card shadow="never" class="mb16">
         <template #header>
-          <div class="section-title">当前内容</div>
+          <div class="section-title">
+            <span>当前内容</span>
+            <el-button
+              v-if="canUpdateLatestVersion"
+              type="primary"
+              plain
+              :loading="updateSaving"
+              @click="openUpdateDialog"
+            >按最新需求更新</el-button>
+          </div>
         </template>
+        <el-alert
+          v-if="task.requirementVersionOutdated === 1"
+          title="依据的需求已有新版本，更新后将生成任务新版本并引用需求当前版本。"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="mb16"
+        />
         <el-descriptions :column="2" border>
           <el-descriptions-item label="标题">{{ task.title }}</el-descriptions-item>
           <el-descriptions-item label="当前版本">v{{ task.currentVersionNo || '—' }}</el-descriptions-item>
@@ -146,14 +163,38 @@
         </el-col>
       </el-row>
     </el-dialog>
+
+    <el-dialog v-model="updateDialogVisible" title="按最新需求版本更新任务" width="720px">
+      <el-alert
+        title="保存后会生成新的任务内容版本，并引用当前需求版本；旧任务版本仍会保留。"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb16"
+      />
+      <el-form ref="updateFormRef" :model="updateForm" :rules="updateRules" label-width="90px">
+        <el-form-item label="任务标题" prop="title">
+          <el-input v-model="updateForm.title" maxlength="255" show-word-limit />
+        </el-form-item>
+        <el-form-item label="任务说明" prop="description">
+          <el-input v-model="updateForm.description" type="textarea" :rows="8" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="updateSaving" @click="updateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="updateSaving" @click="submitLatestVersionUpdate">保存新版本</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ProjectTaskDetail">
-import { compareProjectTaskVersions, getProjectTask, listProjectTaskVersions } from '@/api/project'
+import { compareProjectTaskVersions, getProjectTask, listProjectTaskVersions, updateProjectTaskLatestVersion } from '@/api/project'
+import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const { proxy } = getCurrentInstance()
 const loading = ref(false)
 const notFound = ref(false)
 const loadError = ref(false)
@@ -166,6 +207,15 @@ const comparedVersions = ref([])
 const compareDialogVisible = ref(false)
 const comparing = ref(false)
 const compareError = ref('')
+const updateDialogVisible = ref(false)
+const updateSaving = ref(false)
+const updateFormRef = ref(null)
+const updateForm = reactive({ title: '', description: '' })
+const updateRules = {
+  title: [{ required: true, message: '任务标题不能为空', trigger: 'blur' }],
+  description: [{ required: true, message: '任务说明不能为空', trigger: 'blur' }]
+}
+const userStore = useUserStore()
 
 const isDeleted = computed(() => Number(task.value?.isDeleted) === 1)
 const categoryNames = computed(() => (task.value?.categories || [])
@@ -174,6 +224,8 @@ const categoryNames = computed(() => (task.value?.categories || [])
 const ownerNames = computed(() => (task.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
   .join('、'))
+const canUpdateLatestVersion = computed(() => !isDeleted.value && (userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:edit')))
 
 function backToTasks() {
   router.push(`/project/tasks/${route.params.projectId}`)
@@ -182,6 +234,39 @@ function backToTasks() {
 function viewVersion(version) {
   selectedVersion.value = version
   versionDialogVisible.value = true
+}
+
+function openUpdateDialog() {
+  if (!task.value || !canUpdateLatestVersion.value) return
+  updateForm.title = task.value.title || ''
+  updateForm.description = task.value.description || ''
+  updateDialogVisible.value = true
+  nextTick(() => updateFormRef.value?.clearValidate?.())
+}
+
+async function submitLatestVersionUpdate() {
+  if (updateSaving.value || !task.value) return
+  const valid = await updateFormRef.value?.validate?.().catch(() => false)
+  if (!valid) return
+  try {
+    await proxy?.$modal?.confirm?.('确认按当前需求最新版本保存任务新版本吗？')
+  } catch (_error) {
+    return
+  }
+  updateSaving.value = true
+  try {
+    await updateProjectTaskLatestVersion(route.params.projectId, route.params.taskId, {
+      title: updateForm.title,
+      description: updateForm.description
+    })
+    updateDialogVisible.value = false
+    proxy?.$modal?.msgSuccess?.('任务新版本已保存')
+    await loadDetail()
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '任务新版本保存失败，请检查项目权限。')
+  } finally {
+    updateSaving.value = false
+  }
 }
 
 function isVersionSelected(versionId) {
@@ -241,6 +326,7 @@ async function loadDetail() {
     comparedVersions.value = []
     compareDialogVisible.value = false
     compareError.value = ''
+    updateDialogVisible.value = false
   } catch (error) {
     task.value = null
     versions.value = []
