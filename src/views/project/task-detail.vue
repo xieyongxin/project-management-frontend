@@ -211,7 +211,12 @@ async function compareSelectedVersions() {
       compareVersionIds.value[0],
       compareVersionIds.value[1]
     )
-    comparedVersions.value = response.data || []
+    const left = response.data?.left
+    const right = response.data?.right
+    if (!left || !right) {
+      throw new Error('任务版本对比结果不完整')
+    }
+    comparedVersions.value = [left, right]
     compareDialogVisible.value = true
   } catch (error) {
     comparedVersions.value = []
@@ -234,12 +239,14 @@ async function loadDetail() {
     versions.value = versionResponse.data || []
     compareVersionIds.value = []
     comparedVersions.value = []
+    compareDialogVisible.value = false
     compareError.value = ''
   } catch (error) {
     task.value = null
     versions.value = []
     compareVersionIds.value = []
     comparedVersions.value = []
+    compareDialogVisible.value = false
     if (error.response?.status === 404) {
       notFound.value = true
     } else {

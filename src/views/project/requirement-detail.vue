@@ -36,6 +36,14 @@
 
       <el-alert v-if="submitError" :title="submitError" type="error" show-icon :closable="false" class="mb8" />
       <el-alert
+        v-if="compareError"
+        :title="compareError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="mb8"
+      />
+      <el-alert
         v-if="isDeleted"
         title="该需求已删除，历史内容和版本仍可查看。"
         type="info"
@@ -74,7 +82,19 @@
 
       <el-card shadow="never">
         <template #header>
-          <div class="section-title">版本历史</div>
+          <div class="section-title">
+            <span>版本历史</span>
+            <div class="version-actions">
+              <el-tag v-if="compareVersionIds.length" type="info">已选 {{ compareVersionIds.length }}/2</el-tag>
+              <el-button
+                type="primary"
+                plain
+                :loading="comparing"
+                :disabled="compareVersionIds.length !== 2"
+                @click="compareSelectedVersions"
+              >对比选中版本</el-button>
+            </div>
+          </div>
         </template>
         <el-empty v-if="!versions.length" description="暂无版本历史" />
         <el-table v-else :data="versions" row-key="versionId">
@@ -87,6 +107,15 @@
           <el-table-column label="标题" prop="title" min-width="260" show-overflow-tooltip />
           <el-table-column label="创建时间" prop="createTime" min-width="180">
             <template #default="scope">{{ parseTime(scope.row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="选择对比" width="120">
+            <template #default="scope">
+              <el-checkbox
+                :model-value="isVersionSelected(scope.row.versionId)"
+                :disabled="!isVersionSelected(scope.row.versionId) && compareVersionIds.length >= 2"
+                @change="toggleVersion(scope.row)"
+              />
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="110" fixed="right">
             <template #default="scope">
@@ -110,11 +139,35 @@
         <Editor v-model="versionContent" :min-height="260" type="base64" read-only />
       </template>
     </el-dialog>
+
+    <el-dialog v-model="compareDialogVisible" title="需求版本对比" width="1100px">
+      <el-row v-if="comparedVersions.length === 2" :gutter="16">
+        <el-col v-for="version in comparedVersions" :key="version.versionId" :span="12">
+          <el-card shadow="never" class="compare-card">
+            <template #header>
+              <div class="compare-title">
+                <span>需求版本 v{{ version.versionNo }}</span>
+                <el-tag v-if="Number(version.isDeleted) === 1" type="info" size="small">已删除</el-tag>
+              </div>
+            </template>
+            <el-descriptions :column="1" border class="mb16">
+              <el-descriptions-item label="标题">{{ version.title }}</el-descriptions-item>
+              <el-descriptions-item label="创建时间">{{ parseTime(version.createTime) }}</el-descriptions-item>
+            </el-descriptions>
+            <div class="content-label">正文</div>
+            <Editor :model-value="version.content || '<p></p>'" :min-height="220" type="base64" read-only />
+            <div class="content-label attachment-label">附件快照</div>
+            <pre class="attachment-snapshot">{{ version.attachmentSnapshot || '—' }}</pre>
+          </el-card>
+        </el-col>
+      </el-row>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ProjectRequirementDetail">
 import {
+  compareProjectRequirementVersions,
   deleteProjectRequirement,
   getProjectRequirement,
   listProjectRequirementVersions,
@@ -139,6 +192,11 @@ const formRef = ref()
 const selectedVersion = ref(null)
 const versionDialogVisible = ref(false)
 const versionContent = ref('')
+const compareVersionIds = ref([])
+const comparedVersions = ref([])
+const compareDialogVisible = ref(false)
+const comparing = ref(false)
+const compareError = ref('')
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
@@ -228,6 +286,48 @@ function viewVersion(version) {
   versionDialogVisible.value = true
 }
 
+function isVersionSelected(versionId) {
+  return compareVersionIds.value.some(selectedId => String(selectedId) === String(versionId))
+}
+
+function toggleVersion(version) {
+  const versionId = version.versionId
+  const index = compareVersionIds.value.findIndex(selectedId => String(selectedId) === String(versionId))
+  if (index >= 0) {
+    compareVersionIds.value.splice(index, 1)
+    return
+  }
+  if (compareVersionIds.value.length < 2) {
+    compareVersionIds.value.push(versionId)
+  }
+}
+
+async function compareSelectedVersions() {
+  if (compareVersionIds.value.length !== 2 || comparing.value) return
+  comparing.value = true
+  compareError.value = ''
+  try {
+    const response = await compareProjectRequirementVersions(
+      route.params.projectId,
+      route.params.requirementId,
+      compareVersionIds.value[0],
+      compareVersionIds.value[1]
+    )
+    const left = response.data?.left
+    const right = response.data?.right
+    if (!left || !right) {
+      throw new Error('需求版本对比结果不完整')
+    }
+    comparedVersions.value = [left, right]
+    compareDialogVisible.value = true
+  } catch (error) {
+    comparedVersions.value = []
+    compareError.value = error?.response?.data?.msg || error?.message || '需求版本对比失败，请检查项目权限。'
+  } finally {
+    comparing.value = false
+  }
+}
+
 async function loadDetail() {
   loading.value = true
   notFound.value = false
@@ -239,9 +339,16 @@ async function loadDetail() {
     ])
     requirement.value = detailResponse.data
     versions.value = versionResponse.data || []
+    compareVersionIds.value = []
+    comparedVersions.value = []
+    compareDialogVisible.value = false
+    compareError.value = ''
   } catch (error) {
     requirement.value = null
     versions.value = []
+    compareVersionIds.value = []
+    comparedVersions.value = []
+    compareDialogVisible.value = false
     if (error.response?.status === 404) {
       notFound.value = true
     } else {
@@ -279,6 +386,12 @@ onMounted(loadDetail)
   gap: 12px;
 }
 
+.version-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .title-with-status {
   display: flex;
   align-items: center;
@@ -301,5 +414,27 @@ onMounted(loadDetail)
   color: #606266;
   font-size: 14px;
   margin-bottom: 8px;
+}
+
+.compare-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.attachment-label {
+  margin-top: 16px;
+}
+
+.attachment-snapshot {
+  min-height: 42px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 </style>
