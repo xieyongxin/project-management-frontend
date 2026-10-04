@@ -34,7 +34,7 @@
         <el-table-column label="任务编号" prop="taskId" width="110" />
         <el-table-column label="任务标题" prop="title" min-width="240" show-overflow-tooltip>
           <template #default="scope">
-            <span>{{ scope.row.title }}</span>
+            <el-link type="primary" @click="openDetail(scope.row)">{{ scope.row.title }}</el-link>
             <el-tag v-if="isDeleted(scope.row)" type="info" size="small" class="deleted-tag">已删除</el-tag>
           </template>
         </el-table-column>
@@ -115,6 +115,10 @@ const canDeleteTask = computed(() => userStore.permissions?.includes('*:*:*')
 
 function backToProject() {
   router.push(`/project/detail/${route.params.projectId}`)
+}
+
+function openDetail(task) {
+  router.push(`/project/tasks/${route.params.projectId}/${task.taskId}`)
 }
 
 function requirementReference(task) {

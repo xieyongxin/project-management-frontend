@@ -115,6 +115,13 @@ export const constantRoutes = [
         name: 'ProjectTasks',
         hidden: true,
         meta: { title: '项目任务', activeMenu: '/project/index' }
+      },
+      {
+        path: 'tasks/:projectId(\\d+)/:taskId(\\d+)',
+        component: () => import('@/views/project/task-detail.vue'),
+        name: 'ProjectTaskDetail',
+        hidden: true,
+        meta: { title: '任务详情', activeMenu: '/project/index' }
       }
     ]
   },
