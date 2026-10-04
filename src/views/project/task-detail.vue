@@ -31,6 +31,14 @@
         :closable="false"
         class="mb8"
       />
+      <el-alert
+        v-if="compareError"
+        :title="compareError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="mb8"
+      />
 
       <el-card shadow="never" class="mb16">
         <template #header>
@@ -53,7 +61,19 @@
 
       <el-card shadow="never">
         <template #header>
-          <div class="section-title">版本历史</div>
+          <div class="section-title">
+            <span>版本历史</span>
+            <div class="version-actions">
+              <el-tag v-if="compareVersionIds.length" type="info">已选 {{ compareVersionIds.length }}/2</el-tag>
+              <el-button
+                type="primary"
+                plain
+                :loading="comparing"
+                :disabled="compareVersionIds.length !== 2"
+                @click="compareSelectedVersions"
+              >对比选中版本</el-button>
+            </div>
+          </div>
         </template>
         <el-empty v-if="!versions.length" description="暂无版本历史" />
         <el-table v-else :data="versions" row-key="versionId">
@@ -69,6 +89,15 @@
           </el-table-column>
           <el-table-column label="创建时间" prop="createTime" min-width="180">
             <template #default="scope">{{ parseTime(scope.row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="选择对比" width="120">
+            <template #default="scope">
+              <el-checkbox
+                :model-value="isVersionSelected(scope.row.versionId)"
+                :disabled="!isVersionSelected(scope.row.versionId) && compareVersionIds.length >= 2"
+                @change="toggleVersion(scope.row)"
+              />
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="110" fixed="right">
             <template #default="scope">
@@ -93,11 +122,35 @@
         <div class="task-description">{{ selectedVersion.description || '—' }}</div>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="compareDialogVisible" title="任务版本对比" width="1000px">
+      <el-row v-if="comparedVersions.length === 2" :gutter="16">
+        <el-col v-for="version in comparedVersions" :key="version.versionId" :span="12">
+          <el-card shadow="never" class="compare-card">
+            <template #header>
+              <div class="compare-title">
+                <span>任务版本 v{{ version.versionNo }}</span>
+                <el-tag v-if="Number(version.isDeleted) === 1" type="info" size="small">已删除</el-tag>
+              </div>
+            </template>
+            <el-descriptions :column="1" border>
+              <el-descriptions-item label="标题">{{ version.title }}</el-descriptions-item>
+              <el-descriptions-item label="依据需求版本">
+                v{{ version.requirementVersionNo || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="创建时间">{{ parseTime(version.createTime) }}</el-descriptions-item>
+            </el-descriptions>
+            <div class="content-label">任务说明</div>
+            <div class="task-description compare-description">{{ version.description || '—' }}</div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ProjectTaskDetail">
-import { getProjectTask, listProjectTaskVersions } from '@/api/project'
+import { compareProjectTaskVersions, getProjectTask, listProjectTaskVersions } from '@/api/project'
 
 const route = useRoute()
 const router = useRouter()
@@ -108,6 +161,11 @@ const task = ref(null)
 const versions = ref([])
 const selectedVersion = ref(null)
 const versionDialogVisible = ref(false)
+const compareVersionIds = ref([])
+const comparedVersions = ref([])
+const compareDialogVisible = ref(false)
+const comparing = ref(false)
+const compareError = ref('')
 
 const isDeleted = computed(() => Number(task.value?.isDeleted) === 1)
 const categoryNames = computed(() => (task.value?.categories || [])
@@ -126,6 +184,43 @@ function viewVersion(version) {
   versionDialogVisible.value = true
 }
 
+function isVersionSelected(versionId) {
+  return compareVersionIds.value.some(selectedId => String(selectedId) === String(versionId))
+}
+
+function toggleVersion(version) {
+  const versionId = version.versionId
+  const index = compareVersionIds.value.findIndex(selectedId => String(selectedId) === String(versionId))
+  if (index >= 0) {
+    compareVersionIds.value.splice(index, 1)
+    return
+  }
+  if (compareVersionIds.value.length < 2) {
+    compareVersionIds.value.push(versionId)
+  }
+}
+
+async function compareSelectedVersions() {
+  if (compareVersionIds.value.length !== 2 || comparing.value) return
+  comparing.value = true
+  compareError.value = ''
+  try {
+    const response = await compareProjectTaskVersions(
+      route.params.projectId,
+      route.params.taskId,
+      compareVersionIds.value[0],
+      compareVersionIds.value[1]
+    )
+    comparedVersions.value = response.data || []
+    compareDialogVisible.value = true
+  } catch (error) {
+    comparedVersions.value = []
+    compareError.value = error?.response?.data?.msg || error?.message || '任务版本对比失败，请检查项目权限。'
+  } finally {
+    comparing.value = false
+  }
+}
+
 async function loadDetail() {
   loading.value = true
   notFound.value = false
@@ -137,9 +232,14 @@ async function loadDetail() {
     ])
     task.value = detailResponse.data
     versions.value = versionResponse.data || []
+    compareVersionIds.value = []
+    comparedVersions.value = []
+    compareError.value = ''
   } catch (error) {
     task.value = null
     versions.value = []
+    compareVersionIds.value = []
+    comparedVersions.value = []
     if (error.response?.status === 404) {
       notFound.value = true
     } else {
@@ -174,6 +274,12 @@ onMounted(loadDetail)
   gap: 12px;
 }
 
+.version-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .title-with-status {
   display: flex;
   align-items: center;
@@ -193,5 +299,20 @@ onMounted(loadDetail)
   color: #606266;
   font-size: 14px;
   margin-bottom: 8px;
+}
+
+.compare-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.compare-description {
+  min-height: 120px;
+  margin-top: 10px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 </style>
