@@ -32,7 +32,12 @@
       />
       <el-table v-loading="loading" :data="tasks">
         <el-table-column label="任务编号" prop="taskId" width="110" />
-        <el-table-column label="任务标题" prop="title" min-width="240" show-overflow-tooltip />
+        <el-table-column label="任务标题" prop="title" min-width="240" show-overflow-tooltip>
+          <template #default="scope">
+            <span>{{ scope.row.title }}</span>
+            <el-tag v-if="isDeleted(scope.row)" type="info" size="small" class="deleted-tag">已删除</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" min-width="120">
           <template #default="scope">
             {{ scope.row.statusLabel || scope.row.status || '—' }}
@@ -64,6 +69,16 @@
         <el-table-column label="更新时间" prop="updateTime" min-width="180">
           <template #default="scope">{{ parseTime(scope.row.updateTime) }}</template>
         </el-table-column>
+        <el-table-column v-if="canDeleteTask" label="操作" width="110" fixed="right">
+          <template #default="scope">
+            <el-button
+              v-if="!isDeleted(scope.row)"
+              link
+              type="danger"
+              @click="deleteTask(scope.row)"
+            >删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <pagination
         v-show="total > 0"
@@ -77,11 +92,12 @@
 </template>
 
 <script setup name="ProjectTasks">
-import { listProjectTasks } from '@/api/project'
+import { deleteProjectTask, listProjectTasks } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const { proxy } = getCurrentInstance()
 const userStore = useUserStore()
 const loading = ref(false)
 const notFound = ref(false)
@@ -94,6 +110,8 @@ const queryParams = reactive({
 })
 const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:list'))
+const canDeleteTask = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:delete'))
 
 function backToProject() {
   router.push(`/project/detail/${route.params.projectId}`)
@@ -115,6 +133,26 @@ function ownerNames(task) {
   return (task.owners || [])
     .map(owner => owner.nickName || owner.userName || owner.userId)
     .join('、')
+}
+
+function isDeleted(task) {
+  return Number(task?.isDeleted) === 1
+}
+
+async function deleteTask(task) {
+  if (isDeleted(task)) return
+  try {
+    await proxy?.$modal?.confirm?.('确认逻辑删除该任务吗？删除后将不能恢复，但项目成员仍可查看任务历史和版本。')
+  } catch (_error) {
+    return
+  }
+  try {
+    await deleteProjectTask(route.params.projectId, task.taskId)
+    proxy?.$modal?.msgSuccess?.('任务已删除')
+    await loadTasks()
+  } catch (error) {
+    proxy?.$modal?.msgError?.(error?.response?.data?.msg || error?.message || '任务删除失败，请检查项目权限。')
+  }
 }
 
 async function loadTasks() {
@@ -163,5 +201,9 @@ onMounted(loadTasks)
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.deleted-tag {
+  margin-left: 8px;
 }
 </style>

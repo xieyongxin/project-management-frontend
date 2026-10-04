@@ -229,3 +229,11 @@ export function updateProjectTaskStatus(projectId, taskId, data) {
     silentErrorStatus: [400, 403, 404]
   })
 }
+
+export function deleteProjectTask(projectId, taskId) {
+  return request({
+    url: '/project/' + projectId + '/tasks/' + taskId,
+    method: 'delete',
+    silentErrorStatus: [400, 403, 404]
+  })
+}
