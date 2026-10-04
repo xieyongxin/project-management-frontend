@@ -187,6 +187,23 @@ export function getProjectRequirementAttachmentUrl(projectId, requirementId, att
   return `${import.meta.env.VITE_APP_BASE_API}/project/${projectId}/requirements/${requirementId}/attachments/${attachmentId}${query}`
 }
 
+export function previewProjectRequirementAgent(projectId, requirementId) {
+  return request({
+    url: `/project/${projectId}/requirements/${requirementId}/agent/preview`,
+    method: 'get',
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
+export function callProjectRequirementAgent(projectId, requirementId, data) {
+  return request({
+    url: `/project/${projectId}/requirements/${requirementId}/agent/calls`,
+    method: 'post',
+    data,
+    silentErrorStatus: [400, 403, 404]
+  })
+}
+
 export function listProjectTaskOptions(projectId) {
   return request({
     url: '/project/' + projectId + '/tasks/options',

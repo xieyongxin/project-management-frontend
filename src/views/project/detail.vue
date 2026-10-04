@@ -202,7 +202,8 @@ const canAddProjectRequirements = computed(() => userStore.permissions?.includes
 const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:list'))
 const canAddProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
-  || userStore.permissions?.includes('project:task:add'))
+  || userStore.permissions?.includes('project:task:add')
+  || userStore.permissions?.includes('project:agent:split'))
 
 function backToList() {
   router.push('/project/index')

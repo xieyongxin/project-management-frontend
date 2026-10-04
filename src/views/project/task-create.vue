@@ -148,7 +148,8 @@ const rules = {
   ownerIds: [{ required: true, type: 'array', min: 1, message: '请至少选择一名负责人', trigger: 'change' }]
 }
 const canCreateTask = computed(() => userStore.permissions?.includes('*:*:*')
-  || userStore.permissions?.includes('project:task:add'))
+  || userStore.permissions?.includes('project:task:add')
+  || userStore.permissions?.includes('project:agent:split'))
 const canViewTasks = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:list'))
 

@@ -31,6 +31,12 @@
             plain
             @click="deleteRequirement"
           >删除需求</el-button>
+          <el-button
+            v-if="canUseAgent && !editing && !isDeleted"
+            type="success"
+            plain
+            @click="openAgent"
+          >Agent 拆分任务</el-button>
         </div>
       </div>
 
@@ -202,6 +208,70 @@
         </el-col>
       </el-row>
     </el-dialog>
+
+    <el-dialog v-model="agentVisible" title="确认发送给 Agent" width="760px">
+      <el-alert title="确认后将锁定当前需求版本并生成可编辑草稿，不会自动创建正式任务。" type="info" show-icon :closable="false" class="mb16" />
+      <el-descriptions v-if="agentRequirement" :column="1" border class="mb16">
+        <el-descriptions-item label="需求版本">v{{ agentRequirement.currentVersionNo }}</el-descriptions-item>
+        <el-descriptions-item label="标题">{{ agentRequirement.title }}</el-descriptions-item>
+        <el-descriptions-item label="正文">{{ stripHtml(agentRequirement.content) }}</el-descriptions-item>
+      </el-descriptions>
+      <el-checkbox-group v-model="agentAttachmentIds">
+        <el-checkbox v-for="attachment in agentRequirement?.attachments || []" :key="attachment.attachmentId" :label="attachment.attachmentId">
+          {{ attachment.originalName }}
+        </el-checkbox>
+      </el-checkbox-group>
+      <template #footer>
+        <el-button @click="agentVisible = false">取消</el-button>
+        <el-button type="primary" :loading="agentSubmitting" @click="confirmAgent">确认发送</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="agentResultVisible" title="Agent 任务草稿" width="820px">
+      <el-alert
+        title="草稿不会自动创建正式任务。请补充状态、分类和负责人后批量保存。"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb16"
+      />
+      <el-empty v-if="!agentDrafts.length" description="Agent 未生成任务草稿" />
+      <el-card v-for="(draft, index) in agentDrafts" :key="draft._draftId" shadow="never" class="agent-draft-card">
+        <template #header>
+          <div class="agent-draft-header">
+            <span>草稿 {{ index + 1 }}</span>
+            <el-button link type="danger" @click="removeAgentDraft(index)">删除草稿</el-button>
+          </div>
+        </template>
+        <el-form label-width="80px" class="agent-draft-form">
+          <el-form-item label="标题">
+            <el-input v-model="draft.title" maxlength="255" show-word-limit />
+          </el-form-item>
+          <el-form-item label="说明">
+            <el-input v-model="draft.description" type="textarea" :rows="4" maxlength="5000" show-word-limit />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="draft.status" placeholder="请选择任务状态" style="width: 100%">
+              <el-option v-for="item in agentTaskOptions.statuses" :key="item.dictValue" :label="item.dictLabel" :value="item.dictValue" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="分类">
+            <el-select v-model="draft.categoryValues" multiple filterable collapse-tags style="width: 100%">
+              <el-option v-for="item in agentTaskOptions.categories" :key="item.dictValue" :label="item.dictLabel" :value="item.dictValue" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="负责人">
+            <el-select v-model="draft.ownerIds" multiple filterable collapse-tags style="width: 100%">
+              <el-option v-for="member in agentMembers" :key="member.userId" :label="member.nickName || member.userName || member.userId" :value="member.userId" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </el-card>
+      <template #footer>
+        <el-button @click="agentResultVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="agentSaving" :disabled="!agentDrafts.length" @click="saveAgentDrafts">批量保存正式任务</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -213,7 +283,12 @@ import {
   listProjectRequirementVersions,
   updateProjectRequirementContent,
   uploadProjectRequirementAttachments,
-  getProjectRequirementAttachmentUrl
+  getProjectRequirementAttachmentUrl,
+  previewProjectRequirementAgent,
+  callProjectRequirementAgent,
+  createProjectTask,
+  listProjectMembers,
+  listProjectTaskOptions
 } from '@/api/project'
 import useUserStore from '@/store/modules/user'
 
@@ -241,11 +316,23 @@ const comparing = ref(false)
 const compareError = ref('')
 const attachmentSubmitting = ref(false)
 const currentAttachments = computed(() => requirement.value?.attachments || [])
+const agentVisible = ref(false)
+const agentResultVisible = ref(false)
+const agentRequirement = ref(null)
+const agentAttachmentIds = ref([])
+const agentCall = ref(null)
+const agentSubmitting = ref(false)
+const agentSaving = ref(false)
+const agentDrafts = ref([])
+const agentTaskOptions = reactive({ statuses: [], categories: [] })
+const agentMembers = ref([])
 
 const canEditRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:edit'))
 const canDeleteRequirement = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:requirement:delete'))
+const canUseAgent = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:agent:split'))
 const isDeleted = computed(() => Number(requirement.value?.isDeleted) === 1)
 const ownerNames = computed(() => (requirement.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
@@ -316,6 +403,113 @@ async function deleteRequirement() {
     submitError.value = error?.response?.data?.msg || error?.message || '需求删除失败，请检查项目权限和任务关联。'
   } finally {
     submitting.value = false
+  }
+}
+
+async function openAgent() {
+  try {
+    const response = await previewProjectRequirementAgent(route.params.projectId, route.params.requirementId)
+    agentRequirement.value = response.data
+    agentAttachmentIds.value = (response.data?.attachments || []).map(item => item.attachmentId)
+    agentVisible.value = true
+  } catch (error) {
+    submitError.value = error?.response?.data?.msg || error?.message || 'Agent预览加载失败'
+  }
+}
+
+async function confirmAgent() {
+  if (!agentRequirement.value || agentSubmitting.value) return
+  agentSubmitting.value = true
+  try {
+    const response = await callProjectRequirementAgent(route.params.projectId, route.params.requirementId, {
+      attachmentIds: agentAttachmentIds.value,
+      confirmed: true,
+      idempotencyKey: `web-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    })
+    agentCall.value = response.data
+    agentDrafts.value = parseDrafts(response.data?.draftTasks)
+    await loadAgentTaskOptions()
+    agentVisible.value = false
+    agentResultVisible.value = true
+  } catch (error) {
+    submitError.value = error?.response?.data?.msg || error?.message || 'Agent调用失败'
+  } finally {
+    agentSubmitting.value = false
+  }
+}
+
+function stripHtml(value) {
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function parseDrafts(value) {
+  let drafts = []
+  try { drafts = JSON.parse(value || '[]') } catch (_) { drafts = [] }
+  return (Array.isArray(drafts) ? drafts : []).map((draft, index) => ({
+    _draftId: `${Date.now()}-${index}`,
+    title: draft?.title || '',
+    description: draft?.description || '',
+    status: draft?.status || '',
+    categoryValues: Array.isArray(draft?.categoryValues) ? [...draft.categoryValues] : [],
+    ownerIds: Array.isArray(draft?.ownerIds) ? [...draft.ownerIds] : []
+  }))
+}
+
+async function loadAgentTaskOptions() {
+  try {
+    const [options, members] = await Promise.all([
+      listProjectTaskOptions(route.params.projectId),
+      listProjectMembers(route.params.projectId)
+    ])
+    agentTaskOptions.statuses = options.data?.statuses || []
+    agentTaskOptions.categories = options.data?.categories || []
+    agentMembers.value = members.data || []
+  } catch (error) {
+    agentTaskOptions.statuses = []
+    agentTaskOptions.categories = []
+    agentMembers.value = []
+    submitError.value = error?.response?.data?.msg || error?.message || '任务草稿选项加载失败'
+  }
+}
+
+function removeAgentDraft(index) {
+  agentDrafts.value.splice(index, 1)
+}
+
+async function saveAgentDrafts() {
+  if (agentSaving.value || !agentDrafts.value.length) return
+  const invalid = agentDrafts.value.findIndex(draft => !draft.title.trim() || !draft.description.trim()
+    || !draft.status || !draft.categoryValues.length || !draft.ownerIds.length)
+  if (invalid >= 0) {
+    submitError.value = `请完整填写草稿 ${invalid + 1} 的标题、说明、状态、分类和负责人`
+    return
+  }
+  agentSaving.value = true
+  submitError.value = ''
+  const failures = []
+  try {
+    for (const [index, draft] of agentDrafts.value.entries()) {
+      try {
+        await createProjectTask(route.params.projectId, {
+          requirementId: Number(route.params.requirementId),
+          title: draft.title.trim(),
+          description: draft.description.trim(),
+          status: draft.status,
+          categoryValues: draft.categoryValues,
+          ownerIds: draft.ownerIds
+        })
+      } catch (error) {
+        failures.push(`草稿 ${index + 1}：${error?.response?.data?.msg || error?.message || '保存失败'}`)
+      }
+    }
+    if (failures.length) {
+      submitError.value = failures.join('；')
+      return
+    }
+    proxy?.$modal?.msgSuccess?.('正式任务已批量保存')
+    agentResultVisible.value = false
+  } finally {
+    agentSaving.value = false
   }
 }
 
@@ -538,5 +732,19 @@ onMounted(loadDetail)
   word-break: break-word;
   background: #f5f7fa;
   border-radius: 4px;
+}
+
+.agent-draft-card {
+  margin-bottom: 12px;
+}
+
+.agent-draft-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-draft-form {
+  margin-bottom: -18px;
 }
 </style>

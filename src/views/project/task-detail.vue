@@ -225,7 +225,8 @@ const ownerNames = computed(() => (task.value?.owners || [])
   .map(owner => owner.nickName || owner.userName || owner.userId)
   .join('、'))
 const canUpdateLatestVersion = computed(() => !isDeleted.value && (userStore.permissions?.includes('*:*:*')
-  || userStore.permissions?.includes('project:task:edit')))
+  || userStore.permissions?.includes('project:task:edit')
+  || userStore.permissions?.includes('project:agent:split')))
 
 function backToTasks() {
   router.push(`/project/tasks/${route.params.projectId}`)

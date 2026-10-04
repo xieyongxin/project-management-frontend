@@ -116,7 +116,8 @@ const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:
 const canDeleteTask = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:delete'))
 const canCreateTask = computed(() => userStore.permissions?.includes('*:*:*')
-  || userStore.permissions?.includes('project:task:add'))
+  || userStore.permissions?.includes('project:task:add')
+  || userStore.permissions?.includes('project:agent:split'))
 
 function backToProject() {
   router.push(`/project/detail/${route.params.projectId}`)
