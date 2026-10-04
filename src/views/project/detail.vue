@@ -116,7 +116,16 @@
       <template v-if="canViewProjectTasks">
         <div class="section-heading">
           <h3>项目任务</h3>
-          <el-button link type="primary" @click="openTasks">查看任务列表</el-button>
+          <div class="section-actions">
+            <el-button v-if="canAddProjectTasks" link type="primary" @click="openTaskCreate">新建任务</el-button>
+            <el-button link type="primary" @click="openTasks">查看任务列表</el-button>
+          </div>
+        </div>
+      </template>
+      <template v-if="!canViewProjectTasks && canAddProjectTasks">
+        <div class="section-heading">
+          <h3>项目任务</h3>
+          <el-button link type="primary" @click="openTaskCreate">新建任务</el-button>
         </div>
       </template>
       <template v-if="canViewProjectLogs">
@@ -192,6 +201,8 @@ const canAddProjectRequirements = computed(() => userStore.permissions?.includes
   || userStore.permissions?.includes('project:requirement:add'))
 const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:list'))
+const canAddProjectTasks = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:add'))
 
 function backToList() {
   router.push('/project/index')
@@ -207,6 +218,10 @@ function openRequirementCreate() {
 
 function openTasks() {
   router.push(`/project/tasks/${route.params.projectId}`)
+}
+
+function openTaskCreate() {
+  router.push(`/project/tasks/${route.params.projectId}/create`)
 }
 
 async function loadProject() {

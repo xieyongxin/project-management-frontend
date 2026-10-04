@@ -20,7 +20,10 @@
     <template v-else>
       <div class="page-heading">
         <el-button link icon="ArrowLeft" @click="backToProject">项目详情</el-button>
-        <h2>项目任务</h2>
+        <div class="page-heading-row">
+          <h2>项目任务</h2>
+          <el-button v-if="canCreateTask" type="primary" @click="openCreate">新建任务</el-button>
+        </div>
       </div>
       <el-alert
         v-if="!tasks.length && total === 0"
@@ -112,6 +115,8 @@ const canViewProjectTasks = computed(() => userStore.permissions?.includes('*:*:
   || userStore.permissions?.includes('project:task:list'))
 const canDeleteTask = computed(() => userStore.permissions?.includes('*:*:*')
   || userStore.permissions?.includes('project:task:delete'))
+const canCreateTask = computed(() => userStore.permissions?.includes('*:*:*')
+  || userStore.permissions?.includes('project:task:add'))
 
 function backToProject() {
   router.push(`/project/detail/${route.params.projectId}`)
@@ -119,6 +124,10 @@ function backToProject() {
 
 function openDetail(task) {
   router.push(`/project/tasks/${route.params.projectId}/${task.taskId}`)
+}
+
+function openCreate() {
+  router.push(`/project/tasks/${route.params.projectId}/create`)
 }
 
 function requirementReference(task) {
